@@ -9,10 +9,6 @@ from services.tool_service import tool_service
 
 model_service = ModelService()
 
-@app.get("/")
-def root():
-    return {"status": "ok"}
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("Loading AI model...")
