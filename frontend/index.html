@@ -173,181 +173,228 @@ textarea::placeholder{color:var(--muted)}
   </main>  
 </div>  
 <div class="toast" id="toast"></div>  <script>  
-
-  const API = 'https://ai-assistant-pro-ayb2.onrender.com';
-
-let sessionId = crypto.randomUUID();
-let isLoading = false;
-let selectedFile = null;
-let selectedFileDataUrl = null;
-
-// ── INIT ────────────────────────────────────────────────
-async function init() {
-  checkHealth();
-  loadSessions();
+const API = 'https://ai-assistant-pro-ayb2.onrender.com/api';  
+  
+let sessionId = crypto.randomUUID();  
+let isLoading = false;  
+let selectedFile = null;  
+let selectedFileDataUrl = null;  
+  
+// ── INIT ──────────────────────────────────────────────────────────────  
+async function init() {  
+  checkHealth();  
+  loadSessions();  
+}  
+  
+async function checkHealth() {  
+  try {  
+    const r = await fetch(`${API}/health`);  
+    const d = await r.json();  
+    const dot = document.getElementById('statusDot');  
+    const txt = document.getElementById('statusText');  
+    if (d.model_ready) {  
+      dot.classList.add('ready');  
+      txt.textContent = 'model ready';  
+    } else {  
+      txt.textContent = 'loading...';  
+      setTimeout(checkHealth, 3000);  
+    }  
+  } catch {  
+    document.getElementById('statusText').textContent = 'offline';  
+    setTimeout(checkHealth, 5000);  
+  }  
+}  
+  
+async function loadSessions() {  
+  try {  
+    const r = await fetch(`${API}/sessions`);  
+    const d = await r.json();  
+    renderSessions(d.sessions || []);  
+  } catch {}  
+}  
+  
+function renderSessions(sessions) {  
+  const list = document.getElementById('sessionsList');  
+  list.innerHTML = '';  
+  sessions.forEach(s => {  
+    const div = document.createElement('div');  
+    div.className = `session-item${s.session_id === sessionId ? ' active' : ''}`;  
+    div.innerHTML = `  
+      <div class="session-title">Chat ${s.session_id.slice(0,8)}</div>  
+      <div class="session-preview">${esc(s.preview || 'No messages')}</div>  
+      <button class="session-del" onclick="deleteSession(event,'${s.session_id}')">✕</button>`;  
+    div.onclick = (e) => { if (!e.target.classList.contains('session-del')) loadSession(s.session_id); };  
+    list.appendChild(div);  
+  });  
+}  
+  
+// ── FILE HANDLING ─────────────────────────────────────────────────────  
+function handleFileSelect(input) {  
+  const file = input.files[0];  
+  if (!file) return;  
+  selectedFile = file;  
+  const preview = document.getElementById('filePreview');  
+  const thumb = document.getElementById('fileThumb');  
+  const icon = document.getElementById('fileIcon');  
+  const name = document.getElementById('fileName');  
+  name.textContent = file.name;  
+  preview.style.display = 'flex';  
+  
+  if (file.type.startsWith('image/')) {  
+    const reader = new FileReader();  
+    reader.onload = e => {  
+      selectedFileDataUrl = e.target.result;  
+      thumb.src = e.target.result;  
+      thumb.style.display = 'block';  
+      icon.style.display = 'none';  
+    };  
+    reader.readAsDataURL(file);  
+  } else {  
+    selectedFileDataUrl = null;  
+    thumb.style.display = 'none';  
+    icon.style.display = 'block';  
+    const icons = {pdf:'📄', docx:'📝', doc:'📝', csv:'📊', txt:'📃', py:'🐍', js:'📜', json:'🗂', md:'📋'};  
+    const ext = file.name.split('.').pop().toLowerCase();  
+    icon.textContent = icons[ext] || '📁';  
+  }  
+  document.getElementById('messageInput').focus();  
+}  
+  
+function clearFile() {  
+  selectedFile = null;  
+  selectedFileDataUrl = null;  
+  document.getElementById('fileInput').value = '';  
+  document.getElementById('filePreview').style.display = 'none';  
+  document.getElementById('fileThumb').src = '';  
+}  
+  
+// ── SEND MESSAGE ──────────────────────────────────────────────────────  
+async function sendMessage() {  
+  const input = document.getElementById('messageInput');  
+  const text = input.value.trim();  
+  if ((!text && !selectedFile) || isLoading) return;  
+  
+  input.value = '';  
+  autoResize(input);  
+  hideEmpty();  
+  setLoading(true);  
+  
+  if (selectedFile) {  
+    await sendWithFile(text);  
+  } else {  
+    addMessage('user', text);  
+    showTyping();  
+    await sendText(text);  
+  }  
+  setLoading(false);  
+}  
+  
+async function sendText(text) {  
+  try {  
+    const r = await fetch(`${API}/chat`, {  
+      method: 'POST',  
+      headers: {'Content-Type': 'application/json'},  
+      body: JSON.stringify({message: text, session_id: sessionId, max_tokens: 1024})  
+    });  
+    if (!r.ok) throw new Error((await r.json()).detail || 'Request failed');  
+    const d = await r.json();  
+    removeTyping();  
+    addMessage('assistant', d.response);  
+    loadSessions();  
+  } catch(e) {  
+    removeTyping();  
+    addMessage('assistant', `⚠ Error: ${e.message}`);  
+  }  
+}  
+  
+async function sendWithFile(text) {  
+  const file = selectedFile;  
+  const dataUrl = selectedFileDataUrl;  
+  
+  // Show user message with file preview  
+  const isImage = file.type.startsWith('image/');  
+  const userContent = isImage && dataUrl  
+    ? `<img class="uploaded" src="${dataUrl}" alt="${esc(file.name)}"/><br>${esc(text || 'Analyze this image')}`  
+    : `📎 <strong>${esc(file.name)}</strong>${text ? '<br>' + esc(text) : ''}`;  
+  addMessageRaw('user', userContent);  
+  clearFile();  
+  showTyping();  
+  
+  try {  
+    const formData = new FormData();  
+    formData.append('session_id', sessionId);  
+    formData.append('message', text || '');  
+    formData.append('file', file);  
+  
+    const r = await fetch(`${API}/chat/upload`, {method: 'POST', body: formData});  
+    if (!r.ok) throw new Error((await r.json()).detail || 'Upload failed');  
+    const d = await r.json();  
+    removeTyping();  
+    addMessage('assistant', d.response);  
+    loadSessions();  
+  } catch(e) {  
+    removeTyping();  
+    addMessage('assistant', `⚠ Upload error: ${e.message}`);  
+  }  
+}  
+  
+// ── RENDER MESSAGES ───────────────────────────────────────────────────  
+function addMessage(role, content) {  
+  addMessageRaw(role, formatContent(content));  
+}  
+  
+function addMessageRaw(role, htmlContent) {  
+  const container = document.getElementById('messages');  
+  const hasToolCall = htmlContent.includes('Searching:') || htmlContent.includes('🔍');  
+  const div = document.createElement('div');  
+  div.className = `msg ${role}`;  
+  const time = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});  
+  div.innerHTML = `  
+    <div class="avatar ${role}">${role === 'user' ? 'U' : 'AI'}</div>  
+    <div style="max-width:calc(100% - 42px)">  
+      ${hasToolCall && role === 'assistant' ? '<div class="tool-badge">🌐 web search used</div>' : ''}  
+      <div class="bubble">${htmlContent}</div>  
+      <div class="msg-meta">${time}</div>  
+    </div>`;  
+  container.appendChild(div);  
+  
+  // Add copy buttons to code blocks  
+  div.querySelectorAll('pre').forEach(pre => {  
+    const btn = document.createElement('button');  
+    btn.className = 'copy-btn';  
+    btn.textContent = 'copy';  
+    btn.onclick = () => {  
+      navigator.clipboard.writeText(pre.querySelector('code')?.textContent || pre.textContent);  
+      btn.textContent = 'copied!';  
+      setTimeout(() => btn.textContent = 'copy', 1500);  
+    };  
+    pre.appendChild(btn);  
+  });  
+  
+  container.scrollTop = container.scrollHeight;  
+}  
+  
+function formatContent(text) {  
+  // Strip tool call lines from visible output  
+  text = text.replace(/^TOOL_CALL:.*$/gm, '').trim();  
+  // Code blocks  
+  text = text.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) =>  
+    `<pre><code class="lang-${lang}">${esc(code.trim())}</code></pre>`);  // Inline code
+text = text.replace(/([^\n]+)`/g, '<code>$1</code>');
+// Bold
+text = text.replace(/**([^]+)**/g, '<strong>$1</strong>');
+// Italic
+text = text.replace(/*([^]+)*/g, '<em>$1</em>');
+// Headers
+text = text.replace(/^### (.+)$/gm, '<strong style="font-size:14px">$1</strong>');
+text = text.replace(/^## (.+)$/gm, '<strong style="font-size:15px">$1</strong>');
+text = text.replace(/^# (.+)$/gm, '<strong style="font-size:16px">$1</strong>');
+// Bullet lists
+text = text.replace(/^[-*] (.+)$/gm, '• $1');
+// Line breaks
+text = text.replace(/\n/g, '<br>');
+return text;
 }
 
-// ── HEALTH CHECK (FIXED) ────────────────────────────────
-async function checkHealth() {
-  try {
-    const r = await fetch(`${API}/health`);
-    const text = await r.text();
-
-    let d;
-    try {
-      d = JSON.parse(text);
-    } catch {
-      throw new Error("Invalid health response");
-    }
-
-    const dot = document.getElementById('statusDot');
-    const txt = document.getElementById('statusText');
-
-    if (d.model_ready) {
-      dot.classList.add('ready');
-      txt.textContent = 'model ready';
-    } else {
-      txt.textContent = 'loading...';
-      setTimeout(checkHealth, 3000);
-    }
-
-  } catch {
-    document.getElementById('statusText').textContent = 'offline';
-    setTimeout(checkHealth, 5000);
-  }
-}
-
-// ── LOAD SESSIONS (FIXED) ───────────────────────────────
-async function loadSessions() {
-  try {
-    const r = await fetch(`${API}/sessions`);
-    const text = await r.text();
-    const d = JSON.parse(text);
-    renderSessions(d.sessions || []);
-  } catch {}
-}
-
-// ── SEND TEXT (FIXED SAFE JSON) ─────────────────────────
-async function sendText(text) {
-  try {
-    const r = await fetch(`${API}/chat`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        message: text,
-        session_id: sessionId,
-        max_tokens: 1024
-      })
-    });
-
-    const raw = await r.text();
-
-    let d;
-    try {
-      d = JSON.parse(raw);
-    } catch {
-      throw new Error("Server returned invalid response");
-    }
-
-    if (!r.ok) throw new Error(d.detail || 'Request failed');
-
-    removeTyping();
-    addMessage('assistant', d.response);
-    loadSessions();
-
-  } catch (e) {
-    removeTyping();
-    addMessage('assistant', `⚠ Error: ${e.message}`);
-  }
-}
-
-// ── FILE UPLOAD (FIXED JSON SAFETY) ─────────────────────
-async function sendWithFile(text) {
-  const file = selectedFile;
-  const dataUrl = selectedFileDataUrl;
-
-  const isImage = file.type.startsWith('image/');
-  const userContent = isImage && dataUrl
-    ? `<img class="uploaded" src="${dataUrl}" alt="${esc(file.name)}"/><br>${esc(text || 'Analyze this image')}`
-    : `📎 <strong>${esc(file.name)}</strong>${text ? '<br>' + esc(text) : ''}`;
-
-  addMessageRaw('user', userContent);
-  clearFile();
-  showTyping();
-
-  try {
-    const formData = new FormData();
-    formData.append('session_id', sessionId);
-    formData.append('message', text || '');
-    formData.append('file', file);
-
-    const r = await fetch(`${API}/chat/upload`, {
-      method: 'POST',
-      body: formData
-    });
-
-    const raw = await r.text();
-    let d;
-
-    try {
-      d = JSON.parse(raw);
-    } catch {
-      throw new Error("Upload returned invalid response");
-    }
-
-    if (!r.ok) throw new Error(d.detail || 'Upload failed');
-
-    removeTyping();
-    addMessage('assistant', d.response);
-    loadSessions();
-
-  } catch (e) {
-    removeTyping();
-    addMessage('assistant', `⚠ Upload error: ${e.message}`);
-  }
-}
-
-// ── FORMAT CONTENT (FIXED SYNTAX) ───────────────────────
-function formatContent(text) {
-  text = text.replace(/^TOOL_CALL:.*$/gm, '').trim();
-
-  text = text.replace(/```(\w*)\n?([\s\S]*?)```/g,
-    (_, lang, code) => `<pre><code class="lang-${lang}">${esc(code.trim())}</code></pre>`
-  );
-
-  text = text.replace(/`([^`\n]+)`/g, '<code>$1</code>');
-  text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-  text = text.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-
-  text = text.replace(/^### (.+)$/gm, '<strong style="font-size:14px">$1</strong>');
-  text = text.replace(/^## (.+)$/gm, '<strong style="font-size:15px">$1</strong>');
-  text = text.replace(/^# (.+)$/gm, '<strong style="font-size:16px">$1</strong>');
-
-  text = text.replace(/^[-*] (.+)$/gm, '• $1');
-  text = text.replace(/\n/g, '<br>');
-
-  return text;
-}
-
-// ── TYPING INDICATOR (FIXED) ────────────────────────────
 function showTyping() {
-  const container = document.getElementById('messages');
-
-  const div = document.createElement('div');
-  div.className = 'msg assistant';
-  div.id = 'typingIndicator';
-
-  div.innerHTML = `
-    <div class="avatar assistant">AI</div>
-    <div class="bubble">
-      <div class="typing">
-        <div class="typing-dot"></div>
-        <div class="typing-dot"></div>
-        <div class="typing-dot"></div>
-      </div>
-    </div>
-  `;
-
-  container.appendChild(div);
-  container.scrollTop = container.scrollHeight;
-      }
+const cont
