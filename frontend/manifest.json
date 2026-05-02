@@ -1,0 +1,22 @@
+{
+  "name": "AI Assistant Pro",
+  "short_name": "AI Pro",
+  "description": "Your personal AI assistant",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#080810",
+  "theme_color": "#080810",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://placehold.co/192x192/7fff6e/080810?text=AI",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://placehold.co/512x512/7fff6e/080810?text=AI",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
