@@ -337,7 +337,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
   <div class="sidebar-top">
     <div class="brand">
       <div class="brand-icon">C</div>
-      <span class="brand-name">Claude Pro</span>
+      <span class="brand-name">Retrai Pro</span>
       <span class="brand-plan">Free</span>
     </div>
     <button class="new-chat" onclick="newChat()">
@@ -353,7 +353,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 
   <div class="sidebar-bottom">
     <div class="sidebar-user">
-      <div class="user-avatar">U</div>
+      <div class="user-avatar">You</div>
       <div class="user-info">
         <div class="user-name">You</div>
         <div class="user-plan">Free Plan</div>
@@ -367,10 +367,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 <main class="main">
   <div class="topbar">
     <button class="menu-btn" onclick="toggleSidebar()">☰</button>
-    <div class="topbar-title" id="topbarTitle">Claude Pro</div>
+    <div class="topbar-title" id="topbarTitle">Retrai Pro</div>
     <div class="model-selector" onclick="showToast('Model: Mistral via OpenRouter')">
       <div class="model-dot"></div>
-      Claude Pro
+      Retrai Pro
       <span style="opacity:.4;margin-left:2px">▾</span>
     </div>
   </div>
@@ -379,7 +379,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
     <div class="empty-state" id="emptyState">
       <div class="empty-logo">C</div>
       <div class="empty-title">Good to see you.</div>
-      <div class="empty-sub">I'm Claude Pro — your personal AI. Ask me anything, generate images, analyze files, or search the web.</div>
+      <div class="empty-sub">I'm Retrai Pro — your personal AI. Ask me anything, generate images, analyze files, or search the web.</div>
       <div class="suggestion-grid">
         <div class="suggestion-card" onclick="sendSuggestion('Generate a photorealistic image of a futuristic city at night')">
           <div class="suggestion-card-icon">🎨</div>
@@ -424,7 +424,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
             <button class="tool-btn" onclick="document.getElementById('fileInput').click()" title="Attach file">
               📎<span>Attach</span>
             </button>
-            <input type="file" id="fileInput" accept="image/*,.pdf,.docx,.doc,.txt,.md,.csv,.py,.js,.ts,.tsx,.jsx,.html,.htm,.css,.json,.yaml,.yml,.xml,.sh,.sql,.zip,.xlsx,.xls,.env,.toml,.rs,.go,.java,.php,.rb,.swift,.c,.cpp,.h,.lua" onchange="handleFile(this)"/>
+            <input type="file" id="fileInput" accept="*/*" onchange="handleFile(this)"/>
           </div>
           <div class="input-hint-text">
             <span style="opacity:.5">⏎ send</span>
