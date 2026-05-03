@@ -117,7 +117,7 @@ class ModelService:
             "Authorization": f"Bearer {OPENROUTER_KEY}",
             "Content-Type": "application/json",
             "HTTP-Referer": "https://ai-assistant-pro-ayb2.onrender.com",
-            "X-Title": "Claude Pro"
+            "X-Title": "Retrai Pro"
         }
         r = await self.client.post(OPENROUTER_URL, json=payload, headers=headers)
         print(f"OpenRouter: {r.status_code} | {r.text[:120]}")
@@ -130,7 +130,7 @@ class ModelService:
         payload = {
             "model": GROQ_MODEL,
             "messages": messages,
-            "max_tokens": min(max_tokens, 4096),
+            "max_tokens": min(max_tokens, 8192),
             "temperature": 0.7,
         }
         headers = {
@@ -149,7 +149,7 @@ class ModelService:
         img_url = f"https://image.pollinations.ai/prompt/{encoded}?width=1024&height=1024&model=flux&nologo=true&enhance=true"
         return f"IMAGE:{img_url}|PROMPT:{prompt}"
 
-    async def generate(self, messages: list, max_tokens: int = 4096, image_b64: str = None) -> str:
+    async def generate(self, messages: list, max_tokens: int = 8192, image_b64: str = None) -> str:
         if not self.ready:
             raise RuntimeError("Model not loaded")
 
