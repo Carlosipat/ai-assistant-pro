@@ -111,7 +111,7 @@ class ModelService:
             "model": OPENROUTER_MODEL,
             "messages": messages,
             "max_tokens": max_tokens,
-            "temperature": 0.75,
+            "temperature": 0.7,
         }
         headers = {
             "Authorization": f"Bearer {OPENROUTER_KEY}",
