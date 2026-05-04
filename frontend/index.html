@@ -1,0 +1,978 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<title>Retrai Pro</title>
+<!-- PWA -->
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#d4541a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Retrai Pro">
+<link rel="apple-touch-icon" sizes="192x192" href="/icon-192.png">
+<link rel="icon" type="image/png" href="/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=Crimson+Pro:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d0d0d;--surface:#141414;--card:#1a1a1a;
+  --border:#2a2a2a;--border2:#222;
+  --accent:#d4541a;--accent-h:#e06020;--accent-s:rgba(212,84,26,.12);
+  --text:#f0f0f0;--text2:#a0a0a0;--text3:#606060;
+  --sb:#0a0a0a;--sb-h:#1a1a1a;--sb-a:#222;--sb-b:#1e1e1e;
+  --font:'DM Sans',sans-serif;--serif:'Crimson Pro',Georgia,serif;
+  --r:12px;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font);overflow:hidden;font-size:15px;-webkit-tap-highlight-color:transparent}
+button{font-family:var(--font)}
+
+/* ── AUTH SCREEN ── */
+#authScreen{
+  position:fixed;inset:0;background:var(--bg);
+  display:flex;align-items:center;justify-content:center;
+  z-index:1000;padding:24px;
+}
+.auth-box{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:20px;padding:36px 32px;width:100%;max-width:380px;
+}
+.auth-logo{text-align:center;margin-bottom:28px}
+.auth-logo-icon{
+  width:56px;height:56px;background:var(--accent);border-radius:14px;
+  display:inline-flex;align-items:center;justify-content:center;
+  font-size:26px;color:white;font-family:var(--serif);font-style:italic;
+  font-weight:600;margin-bottom:12px;
+}
+.auth-title{font-size:22px;font-weight:700;text-align:center;margin-bottom:4px}
+.auth-sub{font-size:13px;color:var(--text2);text-align:center;margin-bottom:28px}
+.auth-tabs{display:flex;gap:0;background:var(--card);border-radius:8px;padding:3px;margin-bottom:24px}
+.auth-tab{
+  flex:1;padding:8px;border-radius:6px;border:none;background:none;
+  color:var(--text2);font-size:13px;font-weight:500;cursor:pointer;
+  transition:all .15s;font-family:var(--font);
+}
+.auth-tab.active{background:var(--accent);color:white}
+.auth-field{margin-bottom:14px}
+.auth-field label{display:block;font-size:12px;color:var(--text2);margin-bottom:6px;font-weight:500}
+.auth-field input{
+  width:100%;background:var(--card);border:1px solid var(--border);
+  border-radius:8px;padding:11px 14px;color:var(--text);font-size:14px;
+  outline:none;font-family:var(--font);transition:border-color .2s;
+}
+.auth-field input:focus{border-color:var(--accent)}
+.auth-btn{
+  width:100%;background:var(--accent);color:white;border:none;
+  border-radius:8px;padding:12px;font-size:14px;font-weight:600;
+  cursor:pointer;margin-top:8px;font-family:var(--font);
+  transition:background .15s,transform .1s;
+}
+.auth-btn:hover{background:var(--accent-h)}
+.auth-btn:active{transform:scale(.98)}
+.auth-btn:disabled{opacity:.5;cursor:not-allowed}
+.auth-err{
+  background:rgba(255,80,80,.1);border:1px solid rgba(255,80,80,.2);
+  border-radius:8px;padding:10px 14px;font-size:12px;color:#ff8080;
+  margin-bottom:14px;display:none;
+}
+.auth-footer{text-align:center;font-size:12px;color:var(--text3);margin-top:20px}
+.auth-divider{display:flex;align-items:center;gap:10px;margin:20px 0;color:var(--text3);font-size:12px}
+.auth-divider::before,.auth-divider::after{content:'';flex:1;height:1px;background:var(--border)}
+.guest-btn{
+  width:100%;background:none;border:1px solid var(--border);color:var(--text2);
+  border-radius:8px;padding:11px;font-size:13px;cursor:pointer;
+  font-family:var(--font);transition:border-color .15s,color .15s;
+}
+.guest-btn:hover{border-color:var(--accent);color:var(--accent)}
+
+/* ── MAIN APP ── */
+#app{display:flex;height:100vh;display:none}
+
+/* SIDEBAR */
+.sidebar{
+  width:256px;min-width:256px;background:var(--sb);
+  display:flex;flex-direction:column;border-right:1px solid var(--sb-b);
+  transition:transform .25s cubic-bezier(.4,0,.2,1);z-index:200;
+}
+.sidebar.hidden{transform:translateX(-256px);position:absolute;height:100%}
+.sb-top{padding:14px 12px 8px}
+.brand{display:flex;align-items:center;gap:10px;padding:8px 10px;margin-bottom:6px}
+.brand-icon{width:28px;height:28px;background:var(--accent);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:white;flex-shrink:0;font-family:var(--serif);font-style:italic}
+.brand-name{font-size:15px;font-weight:700;color:#e0e0e0}
+.new-btn{
+  display:flex;align-items:center;gap:8px;padding:9px 12px;
+  border-radius:8px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);
+  color:#e0e0e0;font-size:13px;font-weight:500;cursor:pointer;width:100%;
+  transition:background .15s;margin-bottom:6px;
+}
+.new-btn:hover{background:rgba(255,255,255,.1)}
+.sb-label{padding:6px 14px 3px;font-size:10px;color:#5a4a3a;letter-spacing:.1em;text-transform:uppercase;font-weight:600}
+.sessions{flex:1;overflow-y:auto;padding:3px 8px}
+.sessions::-webkit-scrollbar{width:3px}
+.sessions::-webkit-scrollbar-thumb{background:rgba(255,255,255,.08);border-radius:99px}
+.si{
+  padding:8px 10px;border-radius:8px;cursor:pointer;
+  margin-bottom:1px;position:relative;transition:background .12s;
+}
+.si:hover{background:var(--sb-h)}
+.si.active{background:var(--sb-a)}
+.si.active::before{content:'';position:absolute;left:0;top:20%;height:60%;width:2px;background:var(--accent);border-radius:99px}
+.si-title{font-size:12px;color:#e0e0e0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:22px}
+.si-sub{font-size:10px;color:#505050;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:22px}
+.si-del{position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:#404040;cursor:pointer;font-size:13px;display:none;padding:3px 6px;border-radius:4px}
+.si:hover .si-del{display:block}
+.si-del:hover{color:#ff6060}
+.sb-bottom{padding:10px 12px;border-top:1px solid var(--sb-b)}
+.user-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer;transition:background .12s}
+.user-row:hover{background:var(--sb-h)}
+.user-av{width:30px;height:30px;background:var(--accent);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:white;flex-shrink:0}
+.user-info{flex:1;min-width:0}
+.user-email{font-size:11px;color:#e0e0e0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.user-plan{font-size:10px;color:#505050}
+.logout-btn{background:none;border:none;color:#505050;cursor:pointer;font-size:18px;padding:3px;border-radius:5px;transition:color .12s}
+.logout-btn:hover{color:#ff6060}
+.status-dot{width:6px;height:6px;border-radius:50%;background:#404040;flex-shrink:0}
+.status-dot.on{background:#22c55e;box-shadow:0 0 6px rgba(34,197,94,.5)}
+
+/* MAIN */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;background:var(--bg);min-width:0}
+.topbar{
+  display:flex;align-items:center;gap:8px;padding:10px 14px;
+  border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0;
+}
+.menu-btn{background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer;padding:4px 6px;border-radius:6px;display:none;transition:color .12s}
+.menu-btn:hover{color:var(--text)}
+.topbar-title{font-size:13px;font-weight:600;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
+.tb-badge{
+  font-size:10px;color:var(--text2);background:var(--card);
+  border:1px solid var(--border);border-radius:6px;padding:3px 8px;
+  white-space:nowrap;display:flex;align-items:center;gap:4px;cursor:pointer;
+}
+.tb-dot{width:5px;height:5px;border-radius:50%;background:var(--accent)}
+.save-btn{
+  background:none;border:1px solid var(--border);color:var(--text2);
+  border-radius:7px;padding:5px 10px;font-size:11px;cursor:pointer;
+  transition:all .12s;white-space:nowrap;
+}
+.save-btn:hover{border-color:var(--accent);color:var(--accent)}
+
+/* MESSAGES */
+.msgs{flex:1;overflow-y:auto;display:flex;flex-direction:column}
+.msgs::-webkit-scrollbar{width:4px}
+.msgs::-webkit-scrollbar-thumb{background:var(--border);border-radius:99px}
+.msg-row{padding:20px 0;border-bottom:1px solid var(--border2)}
+.msg-row:last-child{border-bottom:none}
+.msg-row.u{background:var(--surface)}
+.msg-row.a{background:var(--bg)}
+.msg-inner{max-width:700px;margin:0 auto;padding:0 18px;display:flex;gap:13px;align-items:flex-start}
+.av{width:30px;height:30px;min-width:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;margin-top:2px}
+.av.u{background:var(--text);color:var(--bg)}
+.av.a{background:var(--accent);color:white;font-family:var(--serif);font-style:italic}
+.msg-body{flex:1;min-width:0}
+.msg-name{font-size:11px;font-weight:600;color:var(--text2);margin-bottom:5px}
+.msg-text{font-size:15px;line-height:1.75;color:var(--text)}
+.msg-text.ai{font-family:var(--serif);font-size:16px}
+.msg-text p{margin-bottom:10px}.msg-text p:last-child{margin-bottom:0}
+.msg-text strong{font-weight:600}
+.msg-text em{font-style:italic;color:var(--text2)}
+.msg-text code{font-family:monospace;font-size:12.5px;background:rgba(212,84,26,.1);color:#ff9060;padding:1px 5px;border-radius:4px;border:1px solid rgba(212,84,26,.15)}
+.msg-text pre{background:#070707;border:1px solid var(--border);border-radius:10px;margin:12px 0;overflow:hidden}
+.code-hdr{display:flex;align-items:center;justify-content:space-between;padding:8px 14px;border-bottom:1px solid rgba(255,255,255,.06);background:rgba(255,255,255,.02)}
+.code-lang{font-size:10px;color:rgba(255,255,255,.35);font-family:monospace;text-transform:uppercase;letter-spacing:.06em}
+.code-actions{display:flex;gap:6px}
+.code-btn{background:rgba(255,255,255,.07);border:none;color:rgba(255,255,255,.45);border-radius:4px;padding:3px 9px;font-size:10px;cursor:pointer;transition:all .12s;font-family:var(--font)}
+.code-btn:hover{background:rgba(255,255,255,.13);color:rgba(255,255,255,.85)}
+.msg-text pre code{background:none;color:#ddd;padding:14px;display:block;font-size:12px;line-height:1.65;border:none;border-radius:0;overflow-x:auto;font-family:'JetBrains Mono','Courier New',monospace}
+.msg-text ul,.msg-text ol{padding-left:20px;margin:6px 0}.msg-text li{margin:3px 0;line-height:1.7}
+.msg-text h1,.msg-text h2,.msg-text h3{font-weight:600;margin:14px 0 6px;font-family:var(--font)}
+.msg-text h1{font-size:18px}.msg-text h2{font-size:16px}.msg-text h3{font-size:14px}
+.msg-text blockquote{border-left:3px solid var(--accent);padding-left:14px;margin:10px 0;color:var(--text2);font-style:italic}
+.msg-text table{width:100%;border-collapse:collapse;margin:10px 0;font-size:13px}
+.msg-text th{background:var(--card);padding:7px 11px;text-align:left;font-weight:600;border-bottom:2px solid var(--border)}
+.msg-text td{padding:7px 11px;border-bottom:1px solid var(--border2)}
+.msg-actions{display:flex;gap:5px;margin-top:10px;opacity:0;transition:opacity .15s;flex-wrap:wrap}
+.msg-row:hover .msg-actions{opacity:1}
+.act-btn{background:none;border:1px solid var(--border);color:var(--text2);border-radius:6px;padding:3px 10px;font-size:11px;cursor:pointer;transition:all .12s;display:flex;align-items:center;gap:3px}
+.act-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-s)}
+
+/* FILE CARD */
+.file-card{
+  background:var(--card);border:1px solid var(--border);
+  border-radius:10px;padding:14px 16px;margin-top:10px;
+}
+.file-card-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+.file-card-name{font-size:13px;font-weight:600;color:var(--text);font-family:monospace;display:flex;align-items:center;gap:6px}
+.file-card-size{font-size:11px;color:var(--text3)}
+.dl-btn{
+  background:var(--accent);color:white;border:none;border-radius:7px;
+  padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;
+  white-space:nowrap;text-decoration:none;display:flex;align-items:center;gap:5px;
+  font-family:var(--font);transition:background .12s;
+}
+.dl-btn:hover{background:var(--accent-h)}
+.file-preview-code{
+  background:#070707;border-radius:7px;padding:12px;
+  font-family:monospace;font-size:11px;color:#ccc;
+  max-height:180px;overflow-y:auto;white-space:pre-wrap;line-height:1.5;
+  border:1px solid rgba(255,255,255,.05);
+}
+
+/* IMAGE */
+.img-wrap{margin-top:10px}
+.img-label{font-size:11px;color:#d4541a;margin-bottom:8px;display:flex;align-items:center;gap:6px;font-family:monospace}
+.img-spin{width:11px;height:11px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.gen-img{max-width:100%;border-radius:10px;border:1px solid var(--border);display:block;cursor:zoom-in;transition:opacity .3s}
+.img-acts{display:flex;gap:7px;margin-top:9px;flex-wrap:wrap}
+.img-act{
+  display:flex;align-items:center;gap:4px;padding:5px 11px;
+  border-radius:7px;border:1px solid var(--border);background:var(--card);
+  font-size:11px;color:var(--text2);cursor:pointer;font-family:var(--font);
+  text-decoration:none;transition:all .12s;
+}
+.img-act:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-s)}
+.img-prompt{font-size:11px;color:var(--text3);margin-top:7px;font-style:italic;font-family:var(--serif)}
+
+/* EMPTY STATE */
+.empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 20px;gap:0;background:var(--bg)}
+.empty-icon{width:52px;height:52px;background:var(--accent);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:24px;color:white;font-family:var(--serif);font-style:italic;font-weight:600;margin-bottom:18px}
+.empty-title{font-size:24px;font-weight:600;margin-bottom:6px;font-family:var(--serif)}
+.empty-sub{font-size:14px;color:var(--text2);margin-bottom:28px;text-align:center;line-height:1.6;max-width:380px}
+.sugg-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;max-width:520px;width:100%}
+.sugg-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:13px 15px;cursor:pointer;transition:all .15s;text-align:left}
+.sugg-card:hover{border-color:var(--accent);background:var(--accent-s);transform:translateY(-1px)}
+.sugg-icon{font-size:18px;margin-bottom:5px}
+.sugg-title{font-size:12px;font-weight:600;margin-bottom:2px}
+.sugg-desc{font-size:11px;color:var(--text3);line-height:1.4}
+
+/* TYPING */
+.typing-row{padding:20px 0}
+.typing-inner{max-width:700px;margin:0 auto;padding:0 18px;display:flex;gap:13px}
+.typing-dots{display:flex;gap:5px;align-items:center;padding:2px 0}
+.td{width:7px;height:7px;border-radius:50%;background:var(--accent);opacity:.35;animation:td .9s infinite ease-in-out}
+.td:nth-child(2){animation-delay:.2s}.td:nth-child(3){animation-delay:.4s}
+@keyframes td{0%,80%,100%{transform:translateY(0);opacity:.35}40%{transform:translateY(-5px);opacity:1}}
+
+/* INPUT */
+.input-area{padding:12px 16px 16px;background:var(--surface);border-top:1px solid var(--border);flex-shrink:0}
+.input-wrap{max-width:700px;margin:0 auto}
+.file-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.file-chip{
+  display:flex;align-items:center;gap:5px;
+  background:rgba(255,255,255,.05);border:1px solid var(--border);
+  border-radius:6px;padding:4px 8px;font-size:11px;color:#e0e0e0;max-width:160px;
+}
+.file-chip img{width:24px;height:24px;object-fit:cover;border-radius:3px;flex-shrink:0}
+.file-chip-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file-chip-rm{background:none;border:none;color:#505050;cursor:pointer;font-size:12px;padding:0 1px;flex-shrink:0}
+.file-chip-rm:hover{color:#ff6060}
+.chips-clear{font-size:11px;color:var(--accent);background:none;border:none;cursor:pointer;padding:4px 6px;align-self:center}
+.input-box{
+  background:var(--card);border:1px solid var(--border);border-radius:14px;
+  padding:10px 12px;transition:border-color .2s;
+  box-shadow:0 1px 3px rgba(0,0,0,.2);
+}
+.input-box:focus-within{border-color:var(--accent)}
+.input-row{display:flex;align-items:flex-end;gap:8px}
+.attach-btn{
+  background:none;border:none;color:var(--text3);cursor:pointer;
+  font-size:20px;padding:4px;line-height:1;flex-shrink:0;margin-bottom:2px;
+  transition:color .12s;
+}
+.attach-btn:hover{color:var(--accent)}
+textarea{
+  flex:1;background:none;border:none;outline:none;resize:none;
+  font-family:var(--serif);font-size:15px;color:var(--text);
+  line-height:1.6;min-height:26px;max-height:180px;
+}
+textarea::placeholder{color:var(--text3)}
+.send{
+  background:var(--accent);color:white;border:none;border-radius:8px;
+  width:34px;height:34px;cursor:pointer;display:flex;align-items:center;
+  justify-content:center;flex-shrink:0;transition:background .12s,transform .1s;
+}
+.send:hover:not(:disabled){background:var(--accent-h)}
+.send:active:not(:disabled){transform:scale(.93)}
+.send:disabled{opacity:.3;cursor:not-allowed}
+.input-hint{font-size:10px;color:var(--text3);text-align:center;margin-top:7px}
+#fi{display:none}
+
+/* TOAST */
+.toast{
+  position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(8px);
+  background:var(--text);color:var(--bg);border-radius:8px;padding:9px 18px;
+  font-size:12px;opacity:0;transition:opacity .25s,transform .25s;
+  pointer-events:none;z-index:9999;white-space:nowrap;
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+@media(max-width:680px){
+  .sidebar{position:absolute;height:100%;transform:translateX(-256px)}
+  .sidebar.mob-open{transform:translateX(0);box-shadow:4px 0 24px rgba(0,0,0,.5)}
+  .menu-btn{display:flex}
+  .sugg-grid{grid-template-columns:1fr}
+  .msg-inner{padding:0 14px}
+  .input-area{padding:10px 12px 14px}
+}
+</style>
+</head>
+<body>
+
+<!-- AUTH SCREEN -->
+<div id="authScreen">
+  <div class="auth-box">
+    <div class="auth-logo">
+      <div class="auth-logo-icon">R</div>
+      <div class="auth-title">Retrai Pro</div>
+      <div class="auth-sub">Your personal AI assistant by Carlosipat</div>
+    </div>
+    <div class="auth-tabs">
+      <button class="auth-tab active" onclick="switchTab('login')">Sign In</button>
+      <button class="auth-tab" onclick="switchTab('signup')">Create Account</button>
+    </div>
+    <div class="auth-err" id="authErr"></div>
+    <div class="auth-field">
+      <label>Email address</label>
+      <input type="email" id="authEmail" placeholder="you@example.com" autocomplete="email"/>
+    </div>
+    <div class="auth-field">
+      <label>Password</label>
+      <input type="password" id="authPass" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doAuth()"/>
+    </div>
+    <button class="auth-btn" id="authBtn" onclick="doAuth()">Sign In</button>
+    <div class="auth-divider">or</div>
+    <button class="guest-btn" onclick="useAsGuest()">Continue as Guest</button>
+    <div class="auth-footer">Free forever · No credit card required</div>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="sb-top">
+      <div class="brand">
+        <div class="brand-icon">R</div>
+        <span class="brand-name">Retrai Pro</span>
+      </div>
+      <button class="new-btn" onclick="newChat()">✦ New conversation</button>
+    </div>
+    <div class="sb-label">Recents</div>
+    <div class="sessions" id="sessions">
+      <div style="padding:16px 10px;font-size:12px;color:#3a3a3a;text-align:center">No conversations yet</div>
+    </div>
+    <div class="sb-bottom">
+      <div class="user-row">
+        <div class="user-av" id="userAv">U</div>
+        <div class="user-info">
+          <div class="user-email" id="userEmail">Guest</div>
+          <div class="user-plan">Free Plan</div>
+        </div>
+        <button class="logout-btn" onclick="logout()" title="Sign out">⎋</button>
+        <div class="status-dot" id="statusDot"></div>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <button class="menu-btn" onclick="toggleSidebar()">☰</button>
+      <div class="topbar-title" id="topbarTitle">Retrai Pro</div>
+      <div class="tb-badge"><div class="tb-dot"></div>Retrai Pro</div>
+      <button class="save-btn" onclick="saveConvo()">💾 Save</button>
+    </div>
+
+    <div class="msgs" id="msgs">
+      <div class="empty" id="emptyState">
+        <div class="empty-icon">R</div>
+        <div class="empty-title">Good to see you.</div>
+        <div class="empty-sub">I'm Retrai — your personal AI. Ask anything, generate images or files, search the web, or upload documents.</div>
+        <div class="sugg-grid">
+          <div class="sugg-card" onclick="suggest('Generate a photorealistic image of a sunset over the ocean')">
+            <div class="sugg-icon">🎨</div>
+            <div class="sugg-title">Generate an image</div>
+            <div class="sugg-desc">Create photos, art, logos, illustrations</div>
+          </div>
+          <div class="sugg-card" onclick="suggest('Create a Python script that reads a CSV file and shows a summary')">
+            <div class="sugg-icon">📄</div>
+            <div class="sugg-title">Generate a file</div>
+            <div class="sugg-desc">Python, HTML, CSV, JSON, TXT files</div>
+          </div>
+          <div class="sugg-card" onclick="suggest('What are the latest tech news today?')">
+            <div class="sugg-icon">🌐</div>
+            <div class="sugg-title">Search the web</div>
+            <div class="sugg-desc">Real-time news, prices, events</div>
+          </div>
+          <div class="sugg-card" onclick="suggest('Explain machine learning in simple words')">
+            <div class="sugg-icon">💬</div>
+            <div class="sugg-title">Ask anything</div>
+            <div class="sugg-desc">Questions, writing, analysis, math</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="input-area">
+      <div class="input-wrap">
+        <div class="file-chips" id="fileChips" style="display:none"></div>
+        <div class="input-box">
+          <div class="input-row">
+            <button class="attach-btn" onclick="document.getElementById('fi').click()" title="Attach files">📎</button>
+            <input type="file" id="fi" accept="*/*" multiple onchange="onFiles(this)"/>
+            <textarea id="ti" placeholder="Message Retrai..." rows="1"
+              onkeydown="onKey(event)" oninput="resize(this)"></textarea>
+            <button class="send" id="sendBtn" onclick="send()">
+              <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+                <path d="M7 1L7 13M1 7L7 1L13 7" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div class="input-hint">Enter to send · Shift+Enter new line · 📎 attach multiple files</div>
+      </div>
+    </div>
+  </main>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const API = window.location.hostname==='localhost'
+  ? 'http://localhost:8000/api'
+  : 'https://ai-assistant-pro-ayb2.onrender.com/api';
+
+let sessionId = crypto.randomUUID();
+let loading = false;
+let selFiles = [];
+let currentUser = null;
+let authTab = 'login';
+
+// ── AUTH ──────────────────────────────────────────────────────────
+function switchTab(tab) {
+  authTab = tab;
+  document.querySelectorAll('.auth-tab').forEach((t,i)=>
+    t.classList.toggle('active', (i===0&&tab==='login')||(i===1&&tab==='signup')));
+  document.getElementById('authBtn').textContent = tab==='login'?'Sign In':'Create Account';
+  document.getElementById('authErr').style.display='none';
+}
+
+async function doAuth() {
+  const email = document.getElementById('authEmail').value.trim();
+  const pass = document.getElementById('authPass').value;
+  const err = document.getElementById('authErr');
+  const btn = document.getElementById('authBtn');
+  if (!email||!pass) { showAuthErr('Please enter email and password'); return; }
+  btn.disabled=true; btn.textContent='Please wait...';
+  try {
+    const r = await fetch(`${API}/auth/${authTab}`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({email, password:pass})
+    });
+    const d = await r.json();
+    if (!r.ok) { showAuthErr(d.detail||'Authentication failed'); return; }
+    loginSuccess(d.email, d.access_token);
+  } catch(e) {
+    showAuthErr('Connection error. Please try again.');
+  } finally {
+    btn.disabled=false;
+    btn.textContent=authTab==='login'?'Sign In':'Create Account';
+  }
+}
+
+function showAuthErr(msg) {
+  const err = document.getElementById('authErr');
+  err.textContent=msg; err.style.display='block';
+}
+
+function useAsGuest() {
+  loginSuccess('Guest', null);
+}
+
+function loginSuccess(email, token) {
+  currentUser = {email, token};
+  localStorage.setItem('retrai_user', JSON.stringify(currentUser));
+  document.getElementById('authScreen').style.display='none';
+  document.getElementById('app').style.display='flex';
+  document.getElementById('userEmail').textContent=email;
+  document.getElementById('userAv').textContent=email[0].toUpperCase();
+  checkHealth();
+  loadSessions();
+  document.getElementById('ti').focus();
+}
+
+function logout() {
+  localStorage.removeItem('retrai_user');
+  currentUser=null;
+  document.getElementById('app').style.display='none';
+  document.getElementById('authScreen').style.display='flex';
+  document.getElementById('authEmail').value='';
+  document.getElementById('authPass').value='';
+}
+
+// Auto-login if saved
+function tryAutoLogin() {
+  const saved = localStorage.getItem('retrai_user');
+  if (saved) { try { loginSuccess(...Object.values(JSON.parse(saved))); return; } catch{} }
+  document.getElementById('authScreen').style.display='flex';
+}
+
+// ── HEALTH ───────────────────────────────────────────────────────
+async function checkHealth() {
+  try {
+    const r = await fetch(`${API}/health`);
+    const d = await r.json();
+    const dot = document.getElementById('statusDot');
+    if (d.model_ready) dot.classList.add('on');
+    else setTimeout(checkHealth,3000);
+  } catch { setTimeout(checkHealth,5000); }
+}
+
+// ── SESSIONS ─────────────────────────────────────────────────────
+async function loadSessions() {
+  try {
+    const r = await fetch(`${API}/sessions`);
+    const d = await r.json();
+    renderSessions(d.sessions||[]);
+  } catch{}
+}
+
+function renderSessions(list) {
+  const el = document.getElementById('sessions');
+  if (!list.length) {
+    el.innerHTML='<div style="padding:16px 10px;font-size:12px;color:#3a3a3a;text-align:center">No conversations yet</div>';
+    return;
+  }
+  el.innerHTML='';
+  list.forEach(s=>{
+    const div=document.createElement('div');
+    div.className=`si${s.session_id===sessionId?' active':''}`;
+    div.dataset.id=s.session_id;
+    const preview=(s.preview||'New conversation').replace(/IMAGE:.*?\|PROMPT:/g,'').trim();
+    const t=timeAgo(s.updated_at);
+    div.innerHTML=`
+      <div class="si-title">${esc(preview.slice(0,40))}${preview.length>40?'…':''}</div>
+      <div class="si-sub">${t} · ${s.message_count||0} msgs</div>
+      <button class="si-del" onclick="delSession(event,'${s.session_id}')">✕</button>`;
+    div.onclick=e=>{ if(!e.target.classList.contains('si-del')) loadSession(s.session_id); };
+    el.appendChild(div);
+  });
+}
+
+function timeAgo(ts) {
+  if (!ts) return '';
+  const s=(Date.now()-ts*1000)/1000;
+  if(s<60) return 'just now';
+  if(s<3600) return Math.floor(s/60)+'m ago';
+  if(s<86400) return Math.floor(s/3600)+'h ago';
+  return Math.floor(s/86400)+'d ago';
+}
+
+async function loadSession(sid) {
+  sessionId=sid;
+  try {
+    const r=await fetch(`${API}/sessions/${sid}`);
+    if(!r.ok) return;
+    const d=await r.json();
+    const c=document.getElementById('msgs');
+    c.innerHTML='';
+    d.messages.forEach(m=>renderMsg(m.role,m.content));
+    const first=d.messages[0];
+    if(first) setTitle(first.content.replace(/IMAGE:.*?\|PROMPT:/g,'').slice(0,50));
+    c.scrollTop=c.scrollHeight;
+    document.querySelectorAll('.si').forEach(e=>e.classList.toggle('active',e.dataset.id===sid));
+    if(window.innerWidth<=680) document.getElementById('sidebar').classList.remove('mob-open');
+  } catch{}
+}
+
+async function delSession(e,sid) {
+  e.stopPropagation();
+  await fetch(`${API}/sessions/${sid}`,{method:'DELETE'});
+  if(sid===sessionId) newChat(); else loadSessions();
+}
+
+function newChat() {
+  sessionId=crypto.randomUUID();
+  document.getElementById('msgs').innerHTML=`
+    <div class="empty" id="emptyState">
+      <div class="empty-icon">R</div>
+      <div class="empty-title">New conversation</div>
+      <div class="empty-sub">What's on your mind?</div>
+    </div>`;
+  document.getElementById('topbarTitle').textContent='Retrai Pro';
+  document.querySelectorAll('.si').forEach(e=>e.classList.remove('active'));
+  if(window.innerWidth<=680) document.getElementById('sidebar').classList.remove('mob-open');
+  document.getElementById('ti').focus();
+}
+
+// ── FILES ─────────────────────────────────────────────────────────
+function onFiles(input) {
+  selFiles=[...selFiles,...Array.from(input.files)];
+  renderChips();
+  input.value='';
+}
+
+function renderChips() {
+  const wrap=document.getElementById('fileChips');
+  if(!selFiles.length){wrap.style.display='none';wrap.innerHTML='';return;}
+  wrap.style.display='flex';
+  wrap.innerHTML='';
+  selFiles.forEach((f,i)=>{
+    const chip=document.createElement('div');
+    chip.className='file-chip';
+    if(f.type.startsWith('image/')){
+      const img=document.createElement('img');
+      const reader=new FileReader();
+      reader.onload=e=>img.src=e.target.result;
+      reader.readAsDataURL(f);
+      chip.appendChild(img);
+    } else {
+      const ic=document.createElement('span');
+      ic.textContent=fileIcon(f.name);
+      ic.style.flexShrink='0';
+      chip.appendChild(ic);
+    }
+    const nm=document.createElement('span');
+    nm.className='file-chip-name';
+    nm.textContent=f.name;
+    chip.appendChild(nm);
+    const rm=document.createElement('button');
+    rm.className='file-chip-rm';
+    rm.textContent='✕';
+    rm.onclick=()=>{selFiles.splice(i,1);renderChips();};
+    chip.appendChild(rm);
+    wrap.appendChild(chip);
+  });
+  if(selFiles.length>1){
+    const cl=document.createElement('button');
+    cl.className='chips-clear';
+    cl.textContent='Clear all';
+    cl.onclick=()=>{selFiles=[];renderChips();};
+    wrap.appendChild(cl);
+  }
+}
+
+function fileIcon(name) {
+  const m={pdf:'📄',docx:'📝',doc:'📝',csv:'📊',xlsx:'📊',xls:'📊',txt:'📃',
+    py:'🐍',js:'📜',ts:'📜',tsx:'📜',jsx:'📜',html:'🌐',htm:'🌐',css:'🎨',
+    json:'🗂',yaml:'⚙️',yml:'⚙️',xml:'📋',sh:'💻',sql:'🗄️',zip:'🗜️',
+    rs:'🦀',go:'🐹',java:'☕',php:'🐘',rb:'💎',md:'📋',
+    jpg:'🖼️',jpeg:'🖼️',png:'🖼️',gif:'🖼️',webp:'🖼️'};
+  return m[name.split('.').pop().toLowerCase()]||'📁';
+}
+
+// ── SEND ─────────────────────────────────────────────────────────
+async function send() {
+  const ti=document.getElementById('ti');
+  const text=ti.value.trim();
+  if((!text&&!selFiles.length)||loading) return;
+  ti.value=''; resize(ti); hideEmpty(); setLoading(true);
+  if(selFiles.length) await sendFiles(text);
+  else { renderMsg('user',text); showTyping(); await sendText(text); }
+  setLoading(false);
+}
+
+async function sendText(text) {
+  try {
+    const r=await fetch(`${API}/chat`,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({message:text,session_id:sessionId,max_tokens:1024})
+    });
+    removeTyping();
+    if(!r.ok){const e=await r.json().catch(()=>({detail:'Error'}));renderMsg('assistant',`⚠ ${e.detail}`);return;}
+    const d=await r.json();
+    renderMsg('assistant',d.response);
+    setTitle(text);
+    await loadSessions();
+  } catch(e){removeTyping();renderMsg('assistant',`⚠ ${e.message}`);}
+}
+
+async function sendFiles(text) {
+  const files=[...selFiles];
+  // Build user bubble
+  const previews=await Promise.all(files.map(f=>new Promise(res=>{
+    if(f.type.startsWith('image/')){
+      const reader=new FileReader();
+      reader.onload=e=>res(`<img src="${e.target.result}" style="max-width:160px;max-height:120px;border-radius:7px;display:inline-block;margin:3px"/>`);
+      reader.readAsDataURL(f);
+    } else res(`<span style="display:inline-block;background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:6px;padding:3px 9px;font-size:11px;margin:3px">${fileIcon(f.name)} ${esc(f.name)}</span>`);
+  })));
+  renderMsgRaw('user',previews.join('')+(text?`<br><br>${esc(text)}`:''));
+  selFiles=[];renderChips();showTyping();
+  let resp='';
+  try {
+    for(let i=0;i<files.length;i++){
+      const f=files[i];
+      const msg=files.length>1?(i===files.length-1?text:`Analyzing file ${i+1}/${files.length}: ${f.name}`):text;
+      const form=new FormData();
+      form.append('session_id',sessionId);
+      form.append('message',msg||'');
+      form.append('file',f);
+      const r=await fetch(`${API}/chat/upload`,{method:'POST',body:form});
+      if(!r.ok){const e=await r.json().catch(()=>({detail:'Upload failed'}));resp+=`⚠ ${f.name}: ${e.detail}\n\n`;continue;}
+      const d=await r.json();
+      resp+=files.length>1?`**${f.name}:**\n${d.response}\n\n`:d.response;
+    }
+    removeTyping();
+    renderMsg('assistant',resp.trim());
+    setTitle(text||files.map(f=>f.name).join(', '));
+    await loadSessions();
+  } catch(e){removeTyping();renderMsg('assistant',`⚠ ${e.message}`);}
+}
+
+// ── RENDER ────────────────────────────────────────────────────────
+function renderMsg(role,content) {
+  if(!content) return;
+  if(role==='assistant'){
+    // Image
+    if(content.includes('IMAGE:')&&content.includes('|PROMPT:')){
+      const m=content.match(/IMAGE:(.*?)\|PROMPT:([\s\S]*?)(\n\n|$)/);
+      if(m){renderImgMsg(m[1].trim(),m[2].trim());const r=content.replace(/IMAGE:.*?\|PROMPT:[\s\S]*?(\n\n|$)/,'').trim();if(r)renderMsgRaw(role,mdToHtml(r),true);return;}
+    }
+    // File gen
+    if(content.startsWith('FILE_GEN:')){renderFileMsg(content);return;}
+  }
+  renderMsgRaw(role,role==='assistant'?mdToHtml(content):esc(content).replace(/\n/g,'<br>'));
+}
+
+function renderMsgRaw(role,html,isAi) {
+  const ai=role==='assistant'||isAi;
+  const c=document.getElementById('msgs');
+  const row=document.createElement('div');
+  row.className=`msg-row ${role==='user'?'u':'a'}`;
+  const encoded=encodeURIComponent(html);
+  row.innerHTML=`
+    <div class="msg-inner">
+      <div class="av ${role==='user'?'u':'a'}">${role==='user'?(currentUser?.email?.[0]?.toUpperCase()||'U'):'R'}</div>
+      <div class="msg-body">
+        <div class="msg-name">${role==='user'?'You':'Retrai'}</div>
+        <div class="msg-text${ai?' ai':''}">${html}</div>
+        <div class="msg-actions" data-encoded="${encoded}">
+          <button class="act-btn" onclick="copyMsg(this)">📋 Copy</button>
+          <button class="act-btn" onclick="saveMsg(this)">💾 Save</button>
+          <button class="act-btn" onclick="shareMsg(this)">↗ Share</button>
+        </div>
+      </div>
+    </div>`;
+  // Wire code block buttons
+  row.querySelectorAll('pre').forEach(pre=>{
+    const lang=pre.querySelector('code')?.className?.replace('lang-','')||'code';
+    const code=pre.querySelector('code');
+    if(!code) return;
+    const hdr=document.createElement('div');
+    hdr.className='code-hdr';
+    const dlExt={python:'py',javascript:'js',typescript:'ts',html:'html',css:'css',json:'json',bash:'sh',shell:'sh',sql:'sql',yaml:'yaml'}[lang]||'txt';
+    hdr.innerHTML=`<span class="code-lang">${lang}</span><div class="code-actions"><button class="code-btn" onclick="copyCode(this)">Copy</button><button class="code-btn" onclick="dlCode(this,'${lang}.${dlExt}')">⬇ Save</button></div>`;
+    pre.insertBefore(hdr,pre.firstChild);
+    hdr.querySelector('[onclick^="copyCode"]').addEventListener('click',function(){
+      navigator.clipboard.writeText(code.textContent);
+      this.textContent='✓ Copied';
+      setTimeout(()=>this.textContent='Copy',2000);
+    });
+    hdr.querySelector('[onclick^="dlCode"]').addEventListener('click',function(){
+      dlText(code.textContent,`code.${dlExt}`);
+    });
+  });
+  c.appendChild(row);
+  c.scrollTop=c.scrollHeight;
+}
+
+function renderImgMsg(url,prompt) {
+  const c=document.getElementById('msgs');
+  const row=document.createElement('div');
+  row.className='msg-row a';
+  row.innerHTML=`
+    <div class="msg-inner">
+      <div class="av a">R</div>
+      <div class="msg-body">
+        <div class="msg-name">Retrai</div>
+        <div class="msg-text ai">
+          <div class="img-wrap">
+            <div class="img-label"><div class="img-spin"></div>Generating image...</div>
+            <img class="gen-img" src="${url}" alt="${esc(prompt)}"
+              onload="this.previousElementSibling.style.display='none'"
+              onerror="this.previousElementSibling.innerHTML='❌ Failed to generate. Try again.'"
+              onclick="window.open('${url}','_blank')"/>
+            <div class="img-prompt">"${esc(prompt.slice(0,100))}${prompt.length>100?'…':''}"</div>
+            <div class="img-acts">
+              <a class="img-act" href="${url}" download="retrai-image.jpg" target="_blank">⬇ Download</a>
+              <button class="img-act" onclick="window.open('${url}','_blank')">🔍 Full size</button>
+              <button class="img-act" onclick="regenImg('${esc(prompt)}')">🔄 Regenerate</button>
+              <button class="img-act" onclick="varImg('${esc(prompt)}')">✨ Variation</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  c.appendChild(row);c.scrollTop=c.scrollHeight;
+}
+
+function renderFileMsg(content) {
+  const lines=content.split('\n');
+  const filename=lines[0].replace('FILE_GEN:','').trim();
+  const cm=content.match(/```(?:\w*)?\n?([\s\S]*?)```/);
+  const fileContent=cm?cm[1]:lines.slice(1).join('\n');
+  const ext=filename.split('.').pop().toLowerCase();
+  const mimes={txt:'text/plain',py:'text/plain',js:'text/javascript',html:'text/html',
+    css:'text/css',json:'application/json',csv:'text/csv',md:'text/markdown',
+    sh:'text/plain',yaml:'text/yaml',yml:'text/yaml',xml:'text/xml'};
+  const blob=new Blob([fileContent],{type:mimes[ext]||'text/plain'});
+  const url=URL.createObjectURL(blob);
+  const c=document.getElementById('msgs');
+  const row=document.createElement('div');
+  row.className='msg-row a';
+  row.innerHTML=`
+    <div class="msg-inner">
+      <div class="av a">R</div>
+      <div class="msg-body">
+        <div class="msg-name">Retrai</div>
+        <div class="msg-text ai">
+          <p>Here is your file <strong>${esc(filename)}</strong> — ready to download:</p>
+          <div class="file-card">
+            <div class="file-card-top">
+              <div class="file-card-name">${fileIcon(filename)} ${esc(filename)}</div>
+              <a class="dl-btn" href="${url}" download="${esc(filename)}">⬇ Download</a>
+            </div>
+            <div class="file-preview-code">${esc(fileContent.slice(0,600))}${fileContent.length>600?'\n\n... (download to see full file)':''}</div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  c.appendChild(row);c.scrollTop=c.scrollHeight;
+}
+
+// ── MARKDOWN ──────────────────────────────────────────────────────
+function mdToHtml(text) {
+  if(!text) return '';
+  text=text.replace(/IMAGE:.*?\|PROMPT:[\s\S]*?(\n\n|$)/g,'').trim();
+  // Code blocks
+  text=text.replace(/```(\w*)\n?([\s\S]*?)```/g,(_,lang,code)=>
+    `<pre><code class="lang-${esc(lang)}">${esc(code.trim())}</code></pre>`);
+  // Inline code
+  text=text.replace(/`([^`\n]+)`/g,'<code>$1</code>');
+  // Bold/italic
+  text=text.replace(/\*\*([^*\n]+)\*\*/g,'<strong>$1</strong>');
+  text=text.replace(/(?<!\*)\*([^*\n]+)\*(?!\*)/g,'<em>$1</em>');
+  // Headers
+  text=text.replace(/^### (.+)$/gm,'<h3>$1</h3>');
+  text=text.replace(/^## (.+)$/gm,'<h2>$1</h2>');
+  text=text.replace(/^# (.+)$/gm,'<h1>$1</h1>');
+  // Blockquote
+  text=text.replace(/^> (.+)$/gm,'<blockquote>$1</blockquote>');
+  // HR
+  text=text.replace(/^---$/gm,'<hr>');
+  // Lists
+  text=text.replace(/^[\-\*] (.+)$/gm,'<li>$1</li>');
+  text=text.replace(/(<li>.*<\/li>(\n|$))+/g,m=>`<ul>${m}</ul>`);
+  text=text.replace(/^\d+\. (.+)$/gm,'<li>$1</li>');
+  // Paragraphs
+  text=text.replace(/\n\n/g,'</p><p>');
+  text=text.replace(/\n/g,'<br>');
+  return `<p>${text}</p>`;
+}
+
+// ── TYPING ────────────────────────────────────────────────────────
+function showTyping() {
+  const c=document.getElementById('msgs');
+  const div=document.createElement('div');
+  div.className='typing-row';div.id='typing';
+  div.innerHTML=`<div class="typing-inner">
+    <div class="av a">R</div>
+    <div>
+      <div class="msg-name">Retrai</div>
+      <div class="typing-dots"><div class="td"></div><div class="td"></div><div class="td"></div></div>
+    </div>
+  </div>`;
+  c.appendChild(div);c.scrollTop=c.scrollHeight;
+}
+function removeTyping(){document.getElementById('typing')?.remove();}
+function hideEmpty(){document.getElementById('emptyState')?.remove();}
+function setLoading(v){loading=v;document.getElementById('sendBtn').disabled=v;}
+function setTitle(t){
+  if(document.getElementById('topbarTitle').textContent==='Retrai Pro')
+    document.getElementById('topbarTitle').textContent=t.slice(0,50)||'Conversation';
+}
+
+// ── IMAGE ACTIONS ─────────────────────────────────────────────────
+async function regenImg(prompt) {
+  hideEmpty();renderMsg('user',`Regenerate: ${prompt}`);showTyping();setLoading(true);
+  await sendText(`Generate an image of: ${prompt}`);setLoading(false);
+}
+async function varImg(prompt) {
+  const styles=['photorealistic','oil painting','watercolor','anime style','3D render','cinematic'];
+  const style=styles[Math.floor(Math.random()*styles.length)];
+  hideEmpty();renderMsg('user',`Variation (${style}): ${prompt}`);showTyping();setLoading(true);
+  await sendText(`Generate an image: ${prompt}, ${style} style`);setLoading(false);
+}
+
+// ── COPY / SAVE / SHARE ───────────────────────────────────────────
+function copyMsg(btn) {
+  const enc=btn.closest('.msg-actions').dataset.encoded||'';
+  const text=decodeURIComponent(enc).replace(/<[^>]*>/g,'').trim();
+  navigator.clipboard.writeText(text);
+  btn.textContent='✓ Copied';setTimeout(()=>btn.textContent='📋 Copy',2000);
+}
+function saveMsg(btn) {
+  const enc=btn.closest('.msg-actions').dataset.encoded||'';
+  const text=decodeURIComponent(enc).replace(/<[^>]*>/g,'').trim();
+  dlText(text,'retrai-response.txt');
+  showToast('Saved!');
+}
+function shareMsg(btn) {
+  const enc=btn.closest('.msg-actions').dataset.encoded||'';
+  const text=decodeURIComponent(enc).replace(/<[^>]*>/g,'').trim();
+  if(navigator.share) navigator.share({title:'Retrai Pro',text}).catch(()=>{});
+  else { navigator.clipboard.writeText(text); showToast('Copied to clipboard'); }
+}
+function saveConvo() {
+  const rows=document.querySelectorAll('.msg-row');
+  let out='Retrai Pro — Conversation\n'+'='.repeat(40)+'\n\n';
+  rows.forEach(r=>{
+    const name=r.querySelector('.msg-name')?.textContent||'';
+    const text=r.querySelector('.msg-text')?.innerText||'';
+    if(name&&text) out+=`${name}:\n${text}\n\n${'-'.repeat(30)}\n\n`;
+  });
+  dlText(out,'retrai-conversation.txt');
+  showToast('Conversation saved!');
+}
+function copyCode(btn){} // handled inline
+function dlCode(btn,name){} // handled inline
+function dlText(content,name) {
+  const blob=new Blob([content],{type:'text/plain'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=name;a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── UI HELPERS ────────────────────────────────────────────────────
+function onKey(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}}
+function resize(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,180)+'px';}
+function suggest(t){document.getElementById('ti').value=t;send();}
+function toggleSidebar(){document.getElementById('sidebar').classList.toggle('mob-open');}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function showToast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2500);
+}
+document.addEventListener('click',e=>{
+  const sb=document.getElementById('sidebar');
+  if(window.innerWidth<=680&&sb.classList.contains('mob-open')&&!sb.contains(e.target)&&!e.target.classList.contains('menu-btn'))
+    sb.classList.remove('mob-open');
+});
+
+// PWA
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{
+    navigator.serviceWorker.register('/sw.js',{scope:'/'})
+      .then(r=>r.update()).catch(()=>{});
+  });
+}
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;});
+async function installApp(){if(deferredPrompt){deferredPrompt.prompt();deferredPrompt=null;}}
+
+tryAutoLogin();
+</script>
+</body>
+</html>
