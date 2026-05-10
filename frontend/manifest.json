@@ -1,0 +1,52 @@
+{
+  "name": "Retrai Pro",
+  "short_name": "Retrai",
+  "start_url": "https://ai-assistant-pro-1-on09.onrender.com",
+  "scope": "https://ai-assistant-pro-1-on09.onrender.com/",
+  "id": "https://ai-assistant-pro-1-on09.onrender.com/",
+  "display": "standalone",
+  "background_color": "#0d0d0d",
+  "theme_color": "#d4541a",
+  "description": "Your personal AI assistant",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "screenshot1_settings.png",
+      "sizes": "708x1416",
+      "type": "image/png",
+      "form_factor": "narrow"
+    },
+    {
+      "src": "screenshot2_chat.png",
+      "sizes": "708x1416",
+      "type": "image/png",
+      "form_factor": "narrow"
+    },
+    {
+      "src": "screenshot3_sidebar.png",
+      "sizes": "708x1416",
+      "type": "image/png",
+      "form_factor": "narrow"
+    },
+    {
+      "src": "screenshot4_home.png",
+      "sizes": "708x1416",
+      "type": "image/png",
+      "form_factor": "narrow"
+    }
+  ]
+}
