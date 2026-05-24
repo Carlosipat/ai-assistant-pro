@@ -208,6 +208,8 @@ a{color:inherit;text-decoration:none}
 .view-actions{display:flex;gap:8px}
 .btn-primary{display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:var(--radius);background:var(--accent);color:#fff;font-weight:600;font-size:13px;transition:background 0.14s}
 .btn-primary:hover{background:var(--accent2)}
+.btn-secondary{display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:var(--radius);background:var(--bg3);color:var(--text2);font-weight:500;font-size:13px;border:1px solid var(--border);transition:background 0.14s,color 0.14s}
+.btn-secondary:hover{background:var(--bg4);color:var(--text)}
 .btn-secondary{display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:var(--radius);background:var(--bg3);color:var(--text2);font-size:13px;border:1px solid var(--border);transition:background 0.14s,color 0.14s}
 .btn-secondary:hover{background:var(--bg4);color:var(--text)}
 .btn-secondary svg,.btn-primary svg{width:14px;height:14px;stroke-width:2}
@@ -859,6 +861,12 @@ a{color:inherit;text-decoration:none}
 
 <script>
 // ─── STATE ───
+function loadState(key) {
+  try {
+    const val = JSON.parse(localStorage.getItem(key) || '[]');
+    return Array.isArray(val) ? val : [];
+  } catch { return []; }
+}
 const state = {
   currentView: 'chat',
   currentChatId: null,
@@ -867,9 +875,9 @@ const state = {
   sidebarOpen: true,
   artifactPanelOpen: false,
   currentArtifact: null,
-  chats: JSON.parse(localStorage.getItem('retrai_chats') || '[]'),
-  projects: JSON.parse(localStorage.getItem('retrai_projects') || '[]'),
-  artifacts: JSON.parse(localStorage.getItem('retrai_artifacts') || '[]'),
+  chats: loadState('retrai_chats'),
+  projects: loadState('retrai_projects'),
+  artifacts: loadState('retrai_artifacts'),
 };
 
 // ─── SIDEBAR ───
@@ -884,6 +892,8 @@ function showView(v) {
   document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
   document.getElementById('project-detail').style.display = 'none';
   document.getElementById('project-detail').classList.remove('active');
+  // Update sidebar nav active state
+  document.querySelectorAll('.sb-btn').forEach(b => b.classList.remove('active'));
 
   if (v === 'projects') {
     document.getElementById('projects-view').classList.add('active');
@@ -964,6 +974,7 @@ function renderSbItem(chat) {
 // ─── CHATS ───
 function newChat() {
   state.currentChatId = null;
+  chatMessages = [];
   showView('chat');
   document.getElementById('welcome').style.display = '';
   document.getElementById('messages').style.display = 'none';
@@ -979,6 +990,7 @@ function loadChat(id) {
   const chat = state.chats.find(c => c.id === id);
   if (!chat) return;
   state.currentChatId = id;
+  chatMessages = (chat.messages || []).slice(); // restore message history
   showView('chat');
   setTopbar(chat.title || 'Untitled');
   document.getElementById('welcome').style.display = 'none';
@@ -1000,13 +1012,16 @@ function saveChat(id, messages, title) {
   if (idx >= 0) {
     state.chats[idx].messages = messages;
     state.chats[idx].title = title;
+  } else {
+    // Fallback: create if somehow missing
+    state.chats.push({ id, title, messages, starred: false, createdAt: Date.now() });
   }
   localStorage.setItem('retrai_chats', JSON.stringify(state.chats));
   renderSidebar();
 }
 
 // ─── SEND MESSAGE ───
-const chatMessages = [];
+let chatMessages = [];
 
 async function sendMessage() {
   const input = document.getElementById('chat-input');
@@ -1104,7 +1119,7 @@ async function sendMessage() {
 
     saveChat(state.currentChatId, chatMessages, chatMessages[0]?.content?.slice(0, 40) || 'Untitled');
   } catch (err) {
-    typingEl.remove();
+    if (typingEl.parentNode) typingEl.remove();
     const errMsg = { role: 'assistant', content: `⚠️ Could not reach the server. Make sure your backend is running.\n\n\`\`\`\n${err.message}\n\`\`\``, id: uid(), model: 'Error' };
     chatMessages.push(errMsg);
     renderMessage(errMsg, msgs);
@@ -1504,7 +1519,7 @@ function getFileIcon(ext) {
 function formatMarkdown(text) {
   if (!text) return '';
   let html = esc(text);
-  // Code blocks
+  // Code blocks — must come first before other replacements
   html = html.replace(/```(\w+)?\n?([\s\S]+?)```/g, (_, lang, code) =>
     `<pre><div class="pre-header"><span>${lang||'code'}</span><button onclick="navigator.clipboard.writeText(this.closest('pre').querySelector('code').textContent);showToast('Copied','success')">Copy</button></div><code>${code.trim()}</code></pre>`);
   // Inline code
@@ -1517,11 +1532,12 @@ function formatMarkdown(text) {
   html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
   html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
   html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
-  // Lists
-  html = html.replace(/^[-*] (.+)$/gm, '<li>$1</li>');
-  html = html.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
   // Numbered lists
   html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+  // Unordered lists
+  html = html.replace(/^[-*] (.+)$/gm, '<li>$1</li>');
+  // Wrap consecutive <li> blocks in <ul>
+  html = html.replace(/(<li>[\s\S]*?<\/li>)(\n<li>[\s\S]*?<\/li>)*/g, m => '<ul>' + m + '</ul>');
   // Paragraphs
   html = html.replace(/\n\n/g, '</p><p>');
   html = html.replace(/\n/g, '<br>');
