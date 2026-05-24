@@ -981,8 +981,11 @@ a{color:inherit;text-decoration:none}
               <div class="settings-row-desc">Retrai will keep these in mind across all chats</div>
             </div>
             <div class="settings-row-control">
-              <textarea class="settings-input modal-textarea" id="settings-instructions" placeholder="e.g. Keep explanations brief" style="width:220px;height:64px" onchange="saveSettingInstructions()"></textarea>
+              <textarea class="settings-input modal-textarea" id="settings-instructions" placeholder="e.g. Keep explanations brief" style="width:220px;height:64px"></textarea>
             </div>
+          </div>
+          <div class="settings-row" style="justify-content:flex-end;border-bottom:none;padding-top:8px">
+            <button onclick="saveProfileSettings()" style="background:var(--accent);color:#fff;border:none;border-radius:var(--radius);padding:8px 20px;font-size:13px;font-weight:600;cursor:pointer;transition:opacity 0.14s" onmouseover="this.style.opacity=0.85" onmouseout="this.style.opacity=1">Save Changes</button>
           </div>
           <div class="settings-row">
             <div class="settings-row-info">
@@ -1407,6 +1410,35 @@ function updateUserUI() {
   const ed = document.getElementById('settings-email-display');
   if(ed) ed.textContent = authState.email || (authState.isGuest?'Guest mode':'Not signed in');
 }
+function saveProfileSettings() {
+  const dn = document.getElementById('settings-display-name')?.value.trim();
+  const nn = document.getElementById('settings-nickname')?.value.trim();
+  const ins = document.getElementById('settings-instructions')?.value.trim();
+  if(dn) localStorage.setItem(userKey('retrai_display_name'), dn);
+  if(nn) localStorage.setItem(userKey('retrai_nickname'), nn);
+  if(ins !== undefined) localStorage.setItem(userKey('retrai_instructions'), ins);
+  // Update sidebar display
+  const sbName = document.getElementById('sb-user-name');
+  if(sbName && dn) sbName.textContent = dn;
+  // Update avatar initial
+  const initial = (dn||'G')[0].toUpperCase();
+  const av1 = document.getElementById('settings-avatar-el');
+  const av2 = document.getElementById('sb-avatar-el');
+  if(av1) av1.textContent = initial;
+  if(av2) av2.textContent = initial;
+  showToast('Profile saved ✓', 'success');
+}
+function loadProfileSettings() {
+  const dn = localStorage.getItem(userKey('retrai_display_name'));
+  const nn = localStorage.getItem(userKey('retrai_nickname'));
+  const ins = localStorage.getItem(userKey('retrai_instructions'));
+  const dnEl = document.getElementById('settings-display-name');
+  const nnEl = document.getElementById('settings-nickname');
+  const insEl = document.getElementById('settings-instructions');
+  if(dn && dnEl) dnEl.value = dn;
+  if(nn && nnEl) nnEl.value = nn;
+  if(ins && insEl) insEl.value = ins;
+}
 function saveSettingName() {}
 function saveSettingInstructions() {}
 function saveToggle(key, el) {
@@ -1472,6 +1504,7 @@ function showView(v) {
     renderArtifacts(); setTopbar('Artifacts');
   } else if(v==='settings'){
     document.getElementById('settings-view').classList.add('active');
+    loadProfileSettings();
     setTopbar('Settings');
   } else {
     document.getElementById('chat-view').classList.add('active');
@@ -1567,12 +1600,14 @@ function renderAttachPreview() {
   const preview=document.getElementById('attach-preview');
   if(!state.pendingFiles.length){preview.style.display='none';preview.innerHTML='';return;}
   preview.style.display='flex';
-  preview.innerHTML=state.pendingFiles.map((f,i)=>`
-    <div class="attach-chip">
-      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width:11px;height:11px;stroke-width:1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25"/></svg>
+  preview.innerHTML=state.pendingFiles.map((f,i)=>{
+    const isImg=f.type.startsWith('image/');
+    const url=isImg?URL.createObjectURL(f):'';
+    return `<div class="attach-chip" style="${isImg?'padding:2px 6px 2px 2px;':''}">
+      ${isImg?`<img src="${url}" style="width:36px;height:36px;object-fit:cover;border-radius:5px;flex-shrink:0" onload="URL.revokeObjectURL(this.src)">`:`<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width:11px;height:11px;stroke-width:1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25"/></svg>`}
       <span>${esc(f.name)}</span>
       <button onclick="removeAttach(${i})"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg></button>
-    </div>`).join('');
+    </div>`;}).join('');
 }
 function removeAttach(i){state.pendingFiles.splice(i,1);renderAttachPreview();}
 
@@ -1796,7 +1831,19 @@ async function sendProjectMessage() {
     } else {
       const headers={'Content-Type':'application/json'};
       if(authState.token) headers['Authorization']=`Bearer ${authState.token}`;
-      const res=await fetch(`${API_BASE}/api/chat/stream`,{method:'POST',headers,body:JSON.stringify({message:text,session_id:sid,model:state.selectedModel})});
+      // Build system prompt from project files + custom instructions
+      const projFiles=(proj.files||[]).filter(f=>f.content&&typeof f.content==='string'&&!f.content.startsWith('data:'));
+      const nickname=localStorage.getItem(userKey('retrai_nickname'))||'';
+      const customInstructions=localStorage.getItem(userKey('retrai_instructions'))||'';
+      let systemPrompt=`You are Retrai, an advanced AI assistant created by Carlosipat.`;
+      if(nickname) systemPrompt+=`\nAddress the user as: ${nickname}.`;
+      if(customInstructions) systemPrompt+=`\n\nCustom instructions: ${customInstructions}`;
+      if(projFiles.length){
+        systemPrompt+=`\n\nThe user has uploaded the following project files — read them carefully and use them to answer questions:\n`;
+        projFiles.forEach(f=>{systemPrompt+=`\n--- FILE: ${f.name} ---\n${f.content}\n`;});
+      }
+      const reqBody={message:text,session_id:sid,model:state.selectedModel,system_prompt:systemPrompt};
+      const res=await fetch(`${API_BASE}/api/chat/stream`,{method:'POST',headers,body:JSON.stringify(reqBody)});
       if(typingEl.parentNode) typingEl.remove();
       const aiId=uid();
       const aiMsg={role:'assistant',content:'',id:aiId,model:'Auto'};
@@ -1884,6 +1931,8 @@ function openArtifactPanel(id) {
   else{iframe.srcdoc=`<pre style="font-family:monospace;font-size:12px;padding:16px;color:#e4e4e7;background:#1a1a1a;margin:0;white-space:pre-wrap">${(art.code||'').replace(/</g,'&lt;')}</pre>`;iframe.style.display='';}
   document.getElementById('artifact-panel').classList.add('open');
   state.artifactPanelOpen=true;
+  // Always start on Preview tab
+  switchArtifactTab('preview');
 }
 function closeArtifactPanel(){document.getElementById('artifact-panel').classList.remove('open');state.artifactPanelOpen=false;}
 function switchArtifactTab(tab){
@@ -1999,9 +2048,22 @@ function addProjectFiles(e) {
   const proj=state.projects.find(p=>p.id===state.currentProjectId);
   if(!proj) return;
   if(!proj.files) proj.files=[];
-  Array.from(e.target.files).forEach(f=>proj.files.push({name:f.name,size:f.size,type:f.type}));
-  saveProjState(); renderProjectFiles(proj);
-  showToast(`${e.target.files.length} file(s) added`,'success');
+  const files=Array.from(e.target.files);
+  let done=0;
+  files.forEach(f=>{
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      proj.files.push({name:f.name,size:f.size,type:f.type,content:ev.target.result});
+      done++;
+      if(done===files.length){saveProjState();renderProjectFiles(proj);showToast(`${files.length} file(s) added`,'success');}
+    };
+    // Read text files as text, others as data URL
+    if(f.type.startsWith('text/')||/\.(py|js|ts|html|css|json|md|txt|csv|xml|yaml|yml|sh|sql)$/i.test(f.name)){
+      reader.readAsText(f);
+    } else {
+      reader.readAsDataURL(f);
+    }
+  });
 }
 function switchPDTab(tab) {
   ['files','skills','mem'].forEach(t=>{
@@ -2093,8 +2155,14 @@ function getFileIcon(ext){
 }
 function formatMarkdown(text) {
   if(!text) return '';
-  // Handle tables before escaping/other formatting
-  let processed = text;
+  // Extract code blocks first (before any escaping) to preserve raw content
+  const codeBlocks=[];
+  let processed=text.replace(/```(\w+)?\n?([\s\S]+?)```/g,(_, lang, code)=>{
+    const id='CB'+codeBlocks.length;
+    codeBlocks.push({lang:lang||'code',code:code.trim()});
+    return `%%${id}%%`;
+  });
+  // Handle tables
   processed = processed.replace(/((?:^|\n)\|.+\|.+\n\|[-| :]+\|\n(?:\|.+\|.+\n?)*)/gm, (tableBlock) => {
     const rows = tableBlock.trim().split('\n').filter(r => r.trim());
     if(rows.length < 2) return tableBlock;
@@ -2108,7 +2176,11 @@ function formatMarkdown(text) {
     return `<div style="overflow-x:auto;margin:10px 0"><table style="width:100%;border-collapse:collapse;font-size:13px;border:1px solid var(--border);border-radius:8px;overflow:hidden"><thead style="background:var(--bg3)">${thead}</thead><tbody>${tbody}</tbody></table></div>`;
   });
   let html=esc(processed);
-  html=html.replace(/```(\w+)?\n?([\s\S]+?)```/g,(_,lang,code)=>`<pre><div class="pre-header"><span>${lang||'code'}</span><button onclick="navigator.clipboard.writeText(this.closest('pre').querySelector('code').textContent);showToast('Copied','success')">Copy</button></div><code>${code.trim()}</code></pre>`);
+  // Restore code blocks with proper syntax highlighting (not escaped)
+  codeBlocks.forEach((b,i)=>{
+    const escaped=b.code.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    html=html.replace(`%%CB${i}%%`,`<pre><div class="pre-header"><span>${b.lang}</span><button onclick="navigator.clipboard.writeText(this.closest('pre').querySelector('code').textContent);showToast('Copied','success')">Copy</button></div><code>${escaped}</code></pre>`);
+  });
   html=html.replace(/`([^`]+)`/g,'<code>$1</code>');
   html=html.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
   html=html.replace(/\*(.+?)\*/g,'<em>$1</em>');
@@ -2233,12 +2305,14 @@ function renderPDAttachPreview() {
   if(!preview) return;
   if(!pdPendingFiles.length){preview.style.display='none';preview.innerHTML='';return;}
   preview.style.display='flex';
-  preview.innerHTML=pdPendingFiles.map((f,i)=>`
-    <div class="attach-chip">
-      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width:11px;height:11px;stroke-width:1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25"/></svg>
+  preview.innerHTML=pdPendingFiles.map((f,i)=>{
+    const isImg=f.type.startsWith('image/');
+    const url=isImg?URL.createObjectURL(f):'';
+    return `<div class="attach-chip" style="${isImg?'padding:2px 6px 2px 2px;':''}">
+      ${isImg?`<img src="${url}" style="width:36px;height:36px;object-fit:cover;border-radius:5px;flex-shrink:0" onload="URL.revokeObjectURL(this.src)">`:`<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width:11px;height:11px;stroke-width:1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25"/></svg>`}
       <span>${esc(f.name)}</span>
       <button onclick="pdPendingFiles.splice(${i},1);renderPDAttachPreview()"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg></button>
-    </div>`).join('');
+    </div>`;}).join('');
 }
 
 // ─── PROJECT SESSION DELETE ───
@@ -2286,6 +2360,47 @@ if(isLoggedIn()) {
   document.getElementById('auth-screen').classList.remove('hidden');
 }
 // Model is loaded per-user inside enterApp() — no global read here
+
+// ─── DRAG & DROP ON CHAT INPUTS ───
+(function initDragDrop(){
+  function setupDrop(areaId, onFiles) {
+    const area = document.getElementById(areaId);
+    if(!area) return;
+    ['dragenter','dragover'].forEach(ev=>area.addEventListener(ev,e=>{
+      e.preventDefault(); area.style.outline='2px solid var(--accent)'; area.style.borderRadius='var(--radius2)';
+    }));
+    ['dragleave','drop'].forEach(ev=>area.addEventListener(ev,e=>{
+      e.preventDefault(); area.style.outline=''; area.style.borderRadius='';
+    }));
+    area.addEventListener('drop',e=>{
+      const files=Array.from(e.dataTransfer.files);
+      if(files.length) onFiles(files);
+    });
+  }
+  // Main chat input area
+  document.addEventListener('DOMContentLoaded',()=>{
+    setupDrop('input-area', files=>{
+      state.pendingFiles.push(...files); renderAttachPreview();
+    });
+    setupDrop('pd-input-area', files=>{
+      pdPendingFiles.push(...files); renderPDAttachPreview();
+    });
+  });
+  // Also handle paste into textareas
+  document.addEventListener('paste', e=>{
+    const items=Array.from(e.clipboardData?.items||[]);
+    const imgItems=items.filter(i=>i.kind==='file'&&i.type.startsWith('image/'));
+    if(!imgItems.length) return;
+    const active=document.activeElement;
+    const isChat=active?.id==='chat-input';
+    const isPD=active?.id==='pd-chat-input';
+    if(!isChat&&!isPD) return;
+    e.preventDefault();
+    const files=imgItems.map(i=>i.getAsFile()).filter(Boolean);
+    if(isChat){state.pendingFiles.push(...files);renderAttachPreview();}
+    if(isPD){pdPendingFiles.push(...files);renderPDAttachPreview();}
+  });
+})();
 </script>
 </body>
 </html>
