@@ -1492,6 +1492,8 @@ function showProjectDetail(projectId) {
   renderProjectSessions(proj); renderProjectFiles(proj);
   if(proj.sessions&&proj.sessions.length>0) loadProjectSession(proj.sessions[proj.sessions.length-1]);
   else document.getElementById('pd-messages').innerHTML='';
+  loadSkillToggles();
+  setTimeout(()=>renderProjectMemory(projectId), 100);
 }
 function setTopbar(title,projName) {
   document.getElementById('topbar-title-text').textContent=title;
@@ -2047,7 +2049,21 @@ function getFileIcon(ext){
 }
 function formatMarkdown(text) {
   if(!text) return '';
-  let html=esc(text);
+  // Handle tables before escaping/other formatting
+  let processed = text;
+  processed = processed.replace(/((?:^|\n)\|.+\|.+\n\|[-| :]+\|\n(?:\|.+\|.+\n?)*)/gm, (tableBlock) => {
+    const rows = tableBlock.trim().split('\n').filter(r => r.trim());
+    if(rows.length < 2) return tableBlock;
+    const headerCells = rows[0].replace(/^\||\|$/g,'').split('|').map(c=>c.trim());
+    const bodyRows = rows.slice(2);
+    const thead = '<tr>'+headerCells.map(h=>`<th style="padding:7px 12px;text-align:left;font-weight:600;border-bottom:1px solid var(--border2);color:var(--text);white-space:nowrap">${h}</th>`).join('')+'</tr>';
+    const tbody = bodyRows.map(r=>{
+      const cells=r.replace(/^\||\|$/g,'').split('|').map(c=>c.trim());
+      return '<tr>'+cells.map(c=>`<td style="padding:6px 12px;border-bottom:1px solid var(--border);color:var(--text2)">${c}</td>`).join('')+'</tr>';
+    }).join('');
+    return `<div style="overflow-x:auto;margin:10px 0"><table style="width:100%;border-collapse:collapse;font-size:13px;border:1px solid var(--border);border-radius:8px;overflow:hidden"><thead style="background:var(--bg3)">${thead}</thead><tbody>${tbody}</tbody></table></div>`;
+  });
+  let html=esc(processed);
   html=html.replace(/```(\w+)?\n?([\s\S]+?)```/g,(_,lang,code)=>`<pre><div class="pre-header"><span>${lang||'code'}</span><button onclick="navigator.clipboard.writeText(this.closest('pre').querySelector('code').textContent);showToast('Copied','success')">Copy</button></div><code>${code.trim()}</code></pre>`);
   html=html.replace(/`([^`]+)`/g,'<code>$1</code>');
   html=html.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
@@ -2256,34 +2272,9 @@ async function sendProjectMessage() {
 }
 
 // ─── MARKDOWN TABLE SUPPORT ───
-const _origFormatMarkdown = formatMarkdown;
-function formatMarkdown(text) {
-  if(!text) return '';
-  // Handle tables before other formatting
-  let processed = text;
-  // Replace markdown tables with HTML tables
-  processed = processed.replace(/((?:^|\n)\|.+\|.+\n\|[-| :]+\|\n(?:\|.+\|.+\n?)*)/gm, (tableBlock) => {
-    const rows = tableBlock.trim().split('\n').filter(r => r.trim());
-    if(rows.length < 2) return tableBlock;
-    const headerCells = rows[0].replace(/^\||\|$/g,'').split('|').map(c=>c.trim());
-    const bodyRows = rows.slice(2);
-    const thead = '<tr>'+headerCells.map(h=>`<th style="padding:7px 12px;text-align:left;font-weight:600;border-bottom:1px solid var(--border2);color:var(--text);white-space:nowrap">${h}</th>`).join('')+'</tr>';
-    const tbody = bodyRows.map(r=>{
-      const cells=r.replace(/^\||\|$/g,'').split('|').map(c=>c.trim());
-      return '<tr>'+cells.map(c=>`<td style="padding:6px 12px;border-bottom:1px solid var(--border);color:var(--text2)">${c}</td>`).join('')+'</tr>';
-    }).join('');
-    return `<div style="overflow-x:auto;margin:10px 0"><table style="width:100%;border-collapse:collapse;font-size:13px;border:1px solid var(--border);border-radius:8px;overflow:hidden"><thead style="background:var(--bg3)">${thead}</thead><tbody>${tbody}</tbody></table></div>`;
-  });
-  return _origFormatMarkdown(processed);
-}
 
-// ─── PATCH showProjectDetail to load memory ───
-const _origShowProjectDetail = showProjectDetail;
-function showProjectDetail(projectId) {
-  _origShowProjectDetail(projectId);
-  loadSkillToggles();
-  setTimeout(()=>renderProjectMemory(projectId), 100);
-}
+
+
 
 // ─── INIT ───
 // Check if already logged in from a previous session
