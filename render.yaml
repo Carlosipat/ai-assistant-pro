@@ -26,6 +26,10 @@ services:
         value: /tmp/memory
       - key: PYTHON_VERSION
         value: 3.11.0
+      - key: HF_TOKEN        # ← ADD THIS
+        sync: false
+      - key: HF_MODEL        # ← ADD THIS
+        value: mistralai/Mistral-7B-Instruct-v0.3
 
   - type: web
     name: ai-assistant-frontend
