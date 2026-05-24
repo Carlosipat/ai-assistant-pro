@@ -21,7 +21,7 @@ GROQ_URL   = "https://api.groq.com/openai/v1/chat/completions"
 
 # ── HuggingFace Inference API ────────────────────────────────────────────────
 HF_TOKEN   = os.getenv("HF_TOKEN", "")
-HF_MODEL   = os.getenv("HF_MODEL", "mistralai/Mistral-7B-Instruct-v0.3")
+HF_MODEL   = os.getenv("HF_MODEL", "")
 # HF Inference API endpoint (serverless)
 HF_URL     = f"https://api-inference.huggingface.co/models/{HF_MODEL}/v1/chat/completions"
 
