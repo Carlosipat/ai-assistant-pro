@@ -3,16 +3,29 @@ from collections import defaultdict
 from typing import AsyncGenerator, Optional
 import httpx
 
+# ── Gemini ──────────────────────────────────────────────────────────────────
 GEMINI_URL  = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
 GEMINI_KEY  = os.getenv("GEMINI_API_KEY", "")
+
+# ── OpenRouter ───────────────────────────────────────────────────────────────
 OPENROUTER_KEY = os.getenv("OPENROUTER_KEY", "")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 _raw           = os.getenv("OPENROUTER_MODEL", "").strip().splitlines()[0].strip()
 PRIMARY_MODEL  = _raw or None
 OR_FREE        = ["openrouter/auto"]
+
+# ── Groq ─────────────────────────────────────────────────────────────────────
 GROQ_KEY   = os.getenv("GROQ_API_KEY", "")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 GROQ_URL   = "https://api.groq.com/openai/v1/chat/completions"
+
+# ── HuggingFace Inference API ────────────────────────────────────────────────
+HF_TOKEN   = os.getenv("HF_TOKEN", "")
+HF_MODEL   = os.getenv("HF_MODEL", "mistralai/Mistral-7B-Instruct-v0.3")
+# HF Inference API endpoint (serverless)
+HF_URL     = f"https://api-inference.huggingface.co/models/{HF_MODEL}/v1/chat/completions"
+
+# ── Rate limiting ─────────────────────────────────────────────────────────────
 RATE_LIMIT  = int(os.getenv("RATE_LIMIT_REQUESTS", "60"))
 RATE_WINDOW = int(os.getenv("RATE_LIMIT_WINDOW",   "60"))
 
@@ -22,7 +35,7 @@ IDENTITY — NEVER BREAK:
 - Your name is Retrai. Created by Carlosipat.
 - If asked who you are or what model powers you, say: "I am Retrai, an advanced AI assistant created by Carlosipat."
 - NEVER say you are Claude, Gemini, GPT, Llama, Mistral, or any other model.
-- NEVER mention Anthropic, Google, OpenAI, Meta, or any AI company.
+- NEVER mention Anthropic, Google, OpenAI, Meta, Mistral AI, or any AI company.
 
 PERSONALITY:
 - Warm, intelligent, direct, never robotic.
@@ -89,6 +102,7 @@ class ModelService:
         if GEMINI_KEY:     p.append("Gemini")
         if OPENROUTER_KEY: p.append(f"OpenRouter({PRIMARY_MODEL or 'auto'})")
         if GROQ_KEY:       p.append(f"Groq({GROQ_MODEL})")
+        if HF_TOKEN:       p.append(f"HuggingFace({HF_MODEL})")
         print(f"ModelService ready | {', '.join(p) or 'NO PROVIDERS'}")
 
     async def close(self):
@@ -102,6 +116,8 @@ class ModelService:
         return [{"role":m["role"],"content":str(m["content"])[:mc]} for m in msgs[-n:]]
     def _img_url(self, p:str) -> str:
         return f"https://image.pollinations.ai/prompt/{urllib.parse.quote(p)}?width=1024&height=1024&model=flux&nologo=true&enhance=true"
+
+    # ── Individual provider calls ─────────────────────────────────────────────
 
     async def _gemini(self, msgs:list, max_tokens:int) -> str:
         sys=[m["content"] for m in msgs if m["role"]=="system"]
@@ -137,19 +153,101 @@ class ModelService:
         if r.status_code!=200: raise RuntimeError(f"Groq {r.status_code}: {r.text[:200]}")
         return (r.json()["choices"][0]["message"]["content"] or "").strip()
 
-    async def _llm(self, msgs:list, max_tokens:int) -> str:
-        last=None
-        if GEMINI_KEY:
-            try: return await self._gemini(msgs, max_tokens)
-            except Exception as e: last=e; print(f"Gemini fail: {e}")
-        if OPENROUTER_KEY:
-            for m in (([PRIMARY_MODEL] if PRIMARY_MODEL else [])+[x for x in OR_FREE if x!=PRIMARY_MODEL]):
-                try: return await self._openrouter(msgs, m, max_tokens)
-                except Exception as e: last=e; print(f"OR[{m}] fail: {e}")
-        if GROQ_KEY:
-            try: return await self._groq(msgs, max_tokens)
-            except Exception as e: last=e; print(f"Groq fail: {e}")
-        raise RuntimeError(f"All providers failed. Last: {last}")
+    async def _huggingface(self, msgs:list, max_tokens:int, model:str=None) -> str:
+        """
+        Call HuggingFace Inference API (serverless) using the OpenAI-compatible
+        /v1/chat/completions endpoint. Works with any HF model that supports it,
+        e.g. mistralai/Mistral-7B-Instruct-v0.3, meta-llama/Llama-3.1-8B-Instruct,
+        HuggingFaceH4/zephyr-7b-beta, google/gemma-2-2b-it, etc.
+        """
+        if not HF_TOKEN:
+            raise RuntimeError("HF_TOKEN not set")
+        target_model = model or HF_MODEL
+        url = f"https://api-inference.huggingface.co/models/{target_model}/v1/chat/completions"
+        # Filter to only user/assistant/system roles (HF is strict)
+        clean_msgs = [{"role": m["role"], "content": str(m["content"])} for m in msgs]
+        payload = {
+            "model": target_model,
+            "messages": clean_msgs,
+            "max_tokens": min(max_tokens, 1024),
+            "temperature": 0.7,
+            "stream": False,
+        }
+        headers = {
+            "Authorization": f"Bearer {HF_TOKEN}",
+            "Content-Type": "application/json",
+        }
+        r = await self.client.post(url, json=payload, headers=headers)
+        if r.status_code == 503:
+            # Model is loading — wait and retry once
+            await asyncio.sleep(20)
+            r = await self.client.post(url, json=payload, headers=headers)
+        if r.status_code != 200:
+            raise RuntimeError(f"HuggingFace[{target_model}] {r.status_code}: {r.text[:300]}")
+        data = r.json()
+        return (data["choices"][0]["message"]["content"] or "").strip()
+
+    async def _huggingface_stream(self, msgs:list, max_tokens:int) -> AsyncGenerator[str, None]:
+        """
+        Streaming version of HF call — yields word-by-word chunks like the
+        other providers so the frontend gets a live typewriter effect.
+        """
+        # HF serverless doesn't support true SSE streaming for all models,
+        # so we do a full generate then simulate streaming word by word.
+        full = await self._huggingface(msgs, max_tokens)
+        words = full.split(" ")
+        for i, w in enumerate(words):
+            chunk = w + (" " if i < len(words) - 1 else "")
+            yield f"data: {json.dumps({'content': chunk, 'done': False})}\n\n"
+            await asyncio.sleep(0.012)
+        yield f"data: {json.dumps({'content': '', 'done': True, 'full': full})}\n\n"
+        yield "data: [DONE]\n\n"
+
+    # ── Provider cascade ──────────────────────────────────────────────────────
+
+    async def _llm(self, msgs:list, max_tokens:int, preferred:str=None) -> str:
+        """
+        Call providers in order. If the frontend passes a preferred provider
+        key ('gemini', 'groq', 'deepseek', 'hf') we try that first.
+        Falls back through the full chain on any error.
+        """
+        last = None
+
+        # Build ordered list based on preference
+        order = []
+        if preferred == "gemini" and GEMINI_KEY:
+            order.append("gemini")
+        elif preferred == "groq" and GROQ_KEY:
+            order.append("groq")
+        elif preferred in ("hf", "huggingface") and HF_TOKEN:
+            order.append("hf")
+        elif preferred == "deepseek" and OPENROUTER_KEY:
+            order.append("deepseek")
+
+        # Always add the rest as fallback
+        for p in ["gemini", "openrouter", "groq", "hf"]:
+            if p not in order:
+                order.append(p)
+
+        for provider in order:
+            try:
+                if provider == "gemini" and GEMINI_KEY:
+                    return await self._gemini(msgs, max_tokens)
+                elif provider == "openrouter" and OPENROUTER_KEY:
+                    for m in (([PRIMARY_MODEL] if PRIMARY_MODEL else []) + [x for x in OR_FREE if x != PRIMARY_MODEL]):
+                        try: return await self._openrouter(msgs, m, max_tokens)
+                        except Exception as e: last=e; print(f"OR[{m}] fail: {e}")
+                elif provider == "deepseek" and OPENROUTER_KEY:
+                    return await self._openrouter(msgs, "deepseek/deepseek-r1:free", max_tokens)
+                elif provider == "groq" and GROQ_KEY:
+                    return await self._groq(msgs, max_tokens)
+                elif provider == "hf" and HF_TOKEN:
+                    return await self._huggingface(msgs, max_tokens)
+            except Exception as e:
+                last = e
+                print(f"Provider [{provider}] failed: {e}")
+
+        raise RuntimeError(f"All providers failed. Last error: {last}")
 
     def _extract_tool(self, resp:str):
         m=re.search(r"TOOL:\s*(\w+)\s*\|\s*PARAMS:\s*(\{.*?\})",resp,re.DOTALL)
@@ -157,10 +255,10 @@ class ModelService:
         try: return m.group(1), json.loads(m.group(2))
         except: return m.group(1), {}
 
-    async def _agent(self, msgs:list, max_tokens:int, steps=5) -> str:
+    async def _agent(self, msgs:list, max_tokens:int, steps=5, preferred:str=None) -> str:
         working=list(msgs)
         for _ in range(steps):
-            resp=await self._llm(working, max_tokens)
+            resp=await self._llm(working, max_tokens, preferred=preferred)
             if "TOOL:" in resp and self._ts:
                 tool,params=self._extract_tool(resp)
                 if tool:
@@ -173,7 +271,7 @@ class ModelService:
             return resp
         return resp
 
-    async def generate(self, msgs:list, max_tokens=1024, image_b64=None, user_id="guest") -> str:
+    async def generate(self, msgs:list, max_tokens=1024, image_b64=None, user_id="guest", model:str=None) -> str:
         if not self.ready: raise RuntimeError("Model not loaded")
         if not self._rl.ok(user_id): raise RuntimeError(f"Rate limit. Retry in {self._rl.wait(user_id):.0f}s.")
         trimmed=self._trim(msgs)
@@ -189,22 +287,36 @@ class ModelService:
                     trimmed[-1]["content"]=f"{last}\n\n[SEARCH RESULTS]\n{snip}\n[/SEARCH RESULTS]\nAnswer using these results."
             except Exception as e: print(f"Search inject: {e}")
         full=[{"role":"system","content":SYSTEM_PROMPT}]+trimmed
-        resp=await self._agent(full, max_tokens)
+        resp=await self._agent(full, max_tokens, preferred=model)
         if resp.startswith("IMAGE_GEN:"):
             p=resp[10:].strip(); return f"IMAGE:{self._img_url(p)}|PROMPT:{p}"
         if resp.startswith("FILE_GEN:"): return resp
         return resp
 
-    async def generate_stream(self, msgs:list, user_id="guest") -> AsyncGenerator[str, None]:
+    async def generate_stream(self, msgs:list, user_id="guest", model:str=None) -> AsyncGenerator[str, None]:
+        """
+        For HuggingFace we use the dedicated streaming helper.
+        For all other providers we generate the full response then simulate
+        word-by-word streaming (same behaviour as before).
+        """
         try:
-            full=await self.generate(msgs, max_tokens=1024, user_id=user_id)
-            words=full.split(" ")
-            for i,w in enumerate(words):
-                chunk=w+(" " if i<len(words)-1 else "")
-                yield f"data: {json.dumps({'content':chunk,'done':False})}\n\n"
+            # Detect if HF should be the primary provider for this request
+            use_hf = (model in ("hf", "huggingface")) and HF_TOKEN
+            if use_hf:
+                trimmed = self._trim(msgs)
+                full_msgs = [{"role": "system", "content": SYSTEM_PROMPT}] + trimmed
+                async for chunk in self._huggingface_stream(full_msgs, max_tokens=1024):
+                    yield chunk
+                return
+
+            full = await self.generate(msgs, max_tokens=1024, user_id=user_id, model=model)
+            words = full.split(" ")
+            for i, w in enumerate(words):
+                chunk = w + (" " if i < len(words) - 1 else "")
+                yield f"data: {json.dumps({'content': chunk, 'done': False})}\n\n"
                 await asyncio.sleep(0.012)
-            yield f"data: {json.dumps({'content':'','done':True,'full':full})}\n\n"
+            yield f"data: {json.dumps({'content': '', 'done': True, 'full': full})}\n\n"
             yield "data: [DONE]\n\n"
         except Exception as e:
-            yield f"data: {json.dumps({'content':f'Error: {e}','done':True})}\n\n"
+            yield f"data: {json.dumps({'content': f'Error: {e}', 'done': True})}\n\n"
             yield "data: [DONE]\n\n"
