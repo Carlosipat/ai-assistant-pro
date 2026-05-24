@@ -1109,18 +1109,16 @@ const authState = {
 function isLoggedIn() { return authState.token || authState.isGuest; }
 
 // ─── STATE ───
-function loadState(key) {
-  try { const v = JSON.parse(localStorage.getItem(key)||'[]'); return Array.isArray(v)?v:[]; }
-  catch { return []; }
-}
+// NOTE: chats/projects/artifacts start empty — they are loaded per-user
+// inside enterApp() via loadUserState() once we know who is logged in.
 const state = {
   currentView: 'chat', currentChatId: null, currentProjectId: null,
   currentProjectSession: null, sidebarOpen: true, artifactPanelOpen: false,
   currentArtifact: null, selectedModel: localStorage.getItem('retrai_model')||'auto',
   webSearchOn: false, pendingFiles: [],
-  chats: loadState('retrai_chats'),
-  projects: loadState('retrai_projects'),
-  artifacts: loadState('retrai_artifacts'),
+  chats: [],
+  projects: [],
+  artifacts: [],
 };
 
 // ─── AUTH UI ───
@@ -1213,6 +1211,23 @@ function continueAsGuest() {
   localStorage.setItem('retrai_guest','1');
   enterApp();
 }
+// ─── PER-USER STORAGE ───
+// All chat/project/artifact data is stored under a user-scoped key
+// so switching accounts never leaks data between users.
+function userKey(base) {
+  const uid = authState.userId || authState.isGuest ? (authState.userId || 'guest') : 'guest';
+  return `${base}__${uid}`;
+}
+function loadUserState(base) {
+  try {
+    const v = JSON.parse(localStorage.getItem(userKey(base)) || '[]');
+    return Array.isArray(v) ? v : [];
+  } catch { return []; }
+}
+function saveUserState(base, data) {
+  localStorage.setItem(userKey(base), JSON.stringify(data));
+}
+
 function setAuthSession(token,uid,email) {
   authState.token=token; authState.userId=uid; authState.email=email;
   authState.isGuest=false;
@@ -1220,9 +1235,17 @@ function setAuthSession(token,uid,email) {
   localStorage.setItem('retrai_uid',uid);
   localStorage.setItem('retrai_email',email);
   localStorage.removeItem('retrai_guest');
+  // Load this user's own data (isolated from other users)
+  state.chats = loadUserState('retrai_chats');
+  state.projects = loadUserState('retrai_projects');
+  state.artifacts = loadUserState('retrai_artifacts');
 }
 function enterApp() {
   document.getElementById('auth-screen').classList.add('hidden');
+  // Reload state scoped to the now-active user
+  state.chats = loadUserState('retrai_chats');
+  state.projects = loadUserState('retrai_projects');
+  state.artifacts = loadUserState('retrai_artifacts');
   updateUserUI();
   renderSidebar();
   renderArtifacts();
@@ -1230,19 +1253,24 @@ function enterApp() {
   loadToggles();
 }
 function doLogout() {
+  // Save current user's data before wiping active state
   authState.token=null; authState.userId=null; authState.email=null; authState.isGuest=false;
   localStorage.removeItem('retrai_token');
   localStorage.removeItem('retrai_uid');
   localStorage.removeItem('retrai_email');
   localStorage.removeItem('retrai_guest');
+  // Clear in-memory state so next user starts fresh
+  state.chats=[]; state.projects=[]; state.artifacts=[];
+  state.currentChatId=null; state.currentProjectId=null;
+  chatMessages=[];
   document.getElementById('auth-screen').classList.remove('hidden');
   showToast('Signed out','success');
 }
 function clearAllData() {
   if(!confirm('Delete all local chats, projects and artifacts? This cannot be undone.')) return;
-  localStorage.removeItem('retrai_chats');
-  localStorage.removeItem('retrai_projects');
-  localStorage.removeItem('retrai_artifacts');
+  localStorage.removeItem(userKey('retrai_chats'));
+  localStorage.removeItem(userKey('retrai_projects'));
+  localStorage.removeItem(userKey('retrai_artifacts'));
   state.chats=[]; state.projects=[]; state.artifacts=[];
   renderSidebar(); renderArtifacts();
   newChat();
@@ -1490,7 +1518,7 @@ function saveChat(id,messages,title) {
   const idx=state.chats.findIndex(c=>c.id===id);
   if(idx>=0){state.chats[idx].messages=messages;state.chats[idx].title=title;}
   else state.chats.push({id,title,messages,starred:false,createdAt:Date.now()});
-  localStorage.setItem('retrai_chats',JSON.stringify(state.chats));
+  saveUserState('retrai_chats', state.chats);
   renderSidebar();
 }
 
@@ -1579,7 +1607,7 @@ async function sendMessage() {
         const lang=match[1]||'code'; const code=match[2];
         const artifact={id:artId,name:`Generated ${lang}`,type:lang,code,chatId:state.currentChatId,createdAt:Date.now()};
         state.artifacts.push(artifact);
-        localStorage.setItem('retrai_artifacts',JSON.stringify(state.artifacts));
+        saveUserState('retrai_artifacts', state.artifacts);
       }
     }
     saveChat(state.currentChatId,chatMessages,chatMessages[0]?.content?.slice(0,40)||'Untitled');
@@ -1743,7 +1771,7 @@ function createProject() {
   showProjectDetail(proj.id);
   showToast('Project created','success');
 }
-function saveProjState(){localStorage.setItem('retrai_projects',JSON.stringify(state.projects));if(document.getElementById('projects-view').classList.contains('active'))renderProjects();}
+function saveProjState(){saveUserState('retrai_projects',state.projects);if(document.getElementById('projects-view').classList.contains('active'))renderProjects();}
 function renderProjectSessions(proj) {
   const list=document.getElementById('pd-sessions-list');
   if(!proj.sessions||!proj.sessions.length){
@@ -1840,8 +1868,8 @@ function showCtx(e,type,id) {
 }
 function closeCtx(){document.getElementById('ctx-menu').classList.remove('open');}
 document.addEventListener('click',closeCtx);
-function toggleStar(id){const c=state.chats.find(c=>c.id===id);if(c){c.starred=!c.starred;localStorage.setItem('retrai_chats',JSON.stringify(state.chats));renderSidebar();}}
-function deleteChat(id){state.chats=state.chats.filter(c=>c.id!==id);localStorage.setItem('retrai_chats',JSON.stringify(state.chats));renderSidebar();if(state.currentChatId===id)newChat();}
+function toggleStar(id){const c=state.chats.find(c=>c.id===id);if(c){c.starred=!c.starred;saveUserState('retrai_chats',state.chats);renderSidebar();}}
+function deleteChat(id){state.chats=state.chats.filter(c=>c.id!==id);saveUserState('retrai_chats',state.chats);renderSidebar();if(state.currentChatId===id)newChat();}
 function deleteProject(id){state.projects=state.projects.filter(p=>p.id!==id);saveProjState();showView('projects');}
 
 // ─── FILE UPLOAD MODAL ───
