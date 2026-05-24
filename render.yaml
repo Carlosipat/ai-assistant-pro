@@ -1,0 +1,41 @@
+services:
+  - type: web
+    name: ai-assistant-backend
+    runtime: python
+    region: oregon
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: llama3-8b-8192
+      - key: GROQ_VISION_MODEL
+        value: llava-v1.5-7b-4096-preview
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+      - key: SERPER_API_KEY
+        sync: false
+      - key: OPENWEATHER_KEY
+        sync: false
+      - key: MEMORY_DIR
+        value: /tmp/memory
+      - key: PYTHON_VERSION
+        value: 3.11.0
+
+  - type: web
+    name: ai-assistant-frontend
+    runtime: static
+    region: oregon
+    plan: free
+    rootDir: frontend
+    buildCommand: echo "static"
+    staticPublishPath: .
+    routes:
+      - type: rewrite
+        source: /api/*
+        destination: https://ai-assistant-backend.onrender.com/api/*
