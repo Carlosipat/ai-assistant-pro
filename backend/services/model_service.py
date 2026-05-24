@@ -225,7 +225,7 @@ class ModelService:
             order.append("deepseek")
 
         # Always add the rest as fallback
-        for p in ["gemini", "openrouter", "groq", "hf"]:
+        for p in [ "hf", "openrouter", "groq", "gemini"]:
             if p not in order:
                 order.append(p)
 
