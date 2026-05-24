@@ -2148,7 +2148,105 @@ function autoResize(el){el.style.height='auto';el.style.height=Math.min(el.scrol
 function insertPrompt(text){const i=document.getElementById('chat-input');i.value=text;i.focus();autoResize(i);}
 function copyText(id){const el=document.getElementById('mc-'+id);if(el){navigator.clipboard.writeText(el.textContent);showToast('Copied','success');}}
 function copyCode(id){const art=state.artifacts.find(a=>a.id===id);if(art){navigator.clipboard.writeText(art.code||'');showToast('Code copied','success');}}
-function regenMessage(id){showToast('Regenerating…','success');}
+async function regenMessage(msgId) {
+  // Find the AI message index in chatMessages
+  const msgIdx = chatMessages.findIndex(m => m.id === msgId);
+  if (msgIdx < 0) { showToast('Message not found', 'error'); return; }
+
+  // Find the preceding user message
+  let userMsgIdx = msgIdx - 1;
+  while (userMsgIdx >= 0 && chatMessages[userMsgIdx].role !== 'user') userMsgIdx--;
+  if (userMsgIdx < 0) { showToast('No user message to retry', 'error'); return; }
+
+  const userText = chatMessages[userMsgIdx].content;
+
+  // Remove all AI messages from msgIdx onwards from chatMessages
+  chatMessages.splice(msgIdx);
+
+  // Remove from DOM — remove the AI message element and any after it
+  const msgs = document.getElementById('messages');
+  const aiEl = msgs.querySelector(`[data-msg-id="${msgId}"]`);
+  if (aiEl) {
+    // Also remove any subsequent sibling message elements
+    let el = aiEl;
+    while (el) {
+      const next = el.nextElementSibling;
+      el.remove();
+      el = next;
+    }
+  }
+
+  // Show typing indicator
+  const typingEl = document.createElement('div');
+  typingEl.className = 'msg-wrap msg-ai';
+  typingEl.innerHTML = `<div class="msg-ai-inner"><div class="msg-ai-avatar" style="overflow:hidden;padding:0"><img src="icon-192.png" style="width:100%;height:100%;object-fit:cover;border-radius:50%"></div><div class="msg-ai-content"><div class="msg-sender">Retrai <span class="msg-model-tag">thinking…</span></div><div class="msg-typing"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div></div></div>`;
+  msgs.appendChild(typingEl);
+  msgs.scrollTop = msgs.scrollHeight;
+
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    if (authState.token) headers['Authorization'] = `Bearer ${authState.token}`;
+    const res = await fetch(`${API_BASE}/api/chat/stream`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ message: userText, session_id: state.currentChatId, model: state.selectedModel })
+    });
+
+    if (typingEl.parentNode) typingEl.remove();
+
+    const aiId = uid();
+    const aiMsg = { role: 'assistant', content: '', id: aiId, model: state.selectedModel === 'auto' ? 'Auto' : state.selectedModel };
+    chatMessages.push(aiMsg);
+    renderMessage(aiMsg, msgs);
+    const contentEl = document.getElementById('mc-' + aiId);
+    const modelTag = document.getElementById('mt-' + aiId);
+
+    if (res.body) {
+      const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = '';
+      while (true) {
+        const { done, value } = await reader.read(); if (done) break;
+        buf += dec.decode(value, { stream: true });
+        const lines = buf.split('\n'); buf = lines.pop();
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const d = JSON.parse(line.slice(6));
+              if (d.content) { aiMsg.content += d.content; if (contentEl) contentEl.innerHTML = formatMarkdown(aiMsg.content); msgs.scrollTop = msgs.scrollHeight; }
+              if (d.model && modelTag) { aiMsg.model = d.model; modelTag.textContent = d.model; }
+            } catch {}
+          }
+        }
+      }
+    } else {
+      const data = await res.json();
+      aiMsg.content = data.response || data.content || 'No response.';
+      if (contentEl) contentEl.innerHTML = formatMarkdown(aiMsg.content);
+    }
+
+    // Handle artifacts in retried response
+    if (aiMsg.content.includes('```')) {
+      const match = aiMsg.content.match(/```(\w+)?\n([\s\S]+?)```/);
+      if (match) {
+        const lang = match[1] || 'code'; const code = match[2];
+        const artifact = { id: uid(), name: `Generated ${lang}`, type: lang, code, chatId: state.currentChatId, createdAt: Date.now() };
+        state.artifacts.push(artifact);
+        saveUserState('retrai_artifacts', state.artifacts);
+        if (contentEl) {
+          const barEl = document.createElement('div');
+          barEl.innerHTML = renderArtifactBar(artifact);
+          contentEl.parentNode.appendChild(barEl.firstElementChild);
+          openArtifactPanel(artifact.id);
+        }
+      }
+    }
+
+    saveChat(state.currentChatId, chatMessages, chatMessages[0]?.content?.slice(0, 40) || 'Untitled');
+    showToast('Response regenerated', 'success');
+  } catch (err) {
+    if (typingEl.parentNode) typingEl.remove();
+    const errMsg = { role: 'assistant', content: `⚠️ Retry failed: ${err.message}`, id: uid(), model: 'Error' };
+    chatMessages.push(errMsg); renderMessage(errMsg, msgs); msgs.scrollTop = msgs.scrollHeight;
+  }
+}
 function getFileIcon(ext){
   const map={zip:'<svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 0 1-2.247 2.118H6.622a2.25 2.25 0 0 1-2.247-2.118L3.75 7.5m8.25 3v6.75m0 0-3-3m3 3 3-3M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125Z"/></svg>',html:'<svg fill="none" viewBox="0 0 24 24" stroke="#f97316"><path stroke-linecap="round" stroke-linejoin="round" d="m6.75 7.5 3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0 0 21 18V6a2.25 2.25 0 0 0-2.25-2.25H5.25A2.25 2.25 0 0 0 3 6v12a2.25 2.25 0 0 0 2.25 2.25Z"/></svg>',py:'<svg fill="none" viewBox="0 0 24 24" stroke="#3b82f6"><path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3-4.5 16.5"/></svg>',js:'<svg fill="none" viewBox="0 0 24 24" stroke="#eab308"><path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3-4.5 16.5"/></svg>',pdf:'<svg fill="none" viewBox="0 0 24 24" stroke="#ef4444"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"/></svg>'};
   return map[ext?.toLowerCase()]||'<svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"/></svg>';
