@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Retrai — AI Assistant</title>
 <link rel="manifest" href="/manifest.json">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23d97706'/%3E%3Ctext x='16' y='23' font-family='system-ui,sans-serif' font-weight='800' font-size='20' fill='white' text-anchor='middle'%3ER%3C/text%3E%3C/svg%3E">
 <style>
 :root {
   --bg: #1a1a1a;
@@ -962,35 +963,86 @@ a{color:inherit;text-decoration:none}
             <div class="settings-row-control"><div class="toggle on" id="toggle-send-enter" onclick="this.classList.toggle('on')"></div></div>
           </div>
         </div>
+        <!-- MEMORY SECTION -->
+        <div class="settings-section">
+          <div class="settings-section-title">Memory</div>
+          <div class="settings-row">
+            <div class="settings-row-info">
+              <div class="settings-row-label">Generate memory from chat history</div>
+              <div class="settings-row-desc">Allow Retrai to remember relevant context from your chats across sessions</div>
+            </div>
+            <div class="settings-row-control"><div class="toggle on" id="toggle-memory" onclick="this.classList.toggle('on');saveToggle('retrai_memory',this)"></div></div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-info">
+              <div class="settings-row-label">Clear memory</div>
+              <div class="settings-row-desc">Permanently delete all saved memory and context</div>
+            </div>
+            <div class="settings-row-control">
+              <button class="settings-danger-btn" onclick="if(confirm('Clear all memory? This cannot be undone.')){localStorage.removeItem('retrai_memory_store');showToast('Memory cleared')}">
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width:14px;height:14px;stroke-width:2"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"/></svg>
+                Clear Memory
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- CAPABILITIES SECTION -->
         <div class="settings-section">
           <div class="settings-section-title">Capabilities</div>
           <div class="settings-row">
             <div class="settings-row-info">
               <div class="settings-row-label">Web search</div>
-              <div class="settings-row-desc">Allow Retrai to search the internet</div>
+              <div class="settings-row-desc">Allow Retrai to search the internet for current information</div>
             </div>
-            <div class="settings-row-control"><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
+            <div class="settings-row-control"><div class="toggle on" id="toggle-websearch" onclick="this.classList.toggle('on');saveToggle('retrai_websearch',this)"></div></div>
           </div>
           <div class="settings-row">
             <div class="settings-row-info">
               <div class="settings-row-label">Code execution</div>
-              <div class="settings-row-desc">Allow Retrai to run code snippets</div>
+              <div class="settings-row-desc">Allow Retrai to run and execute code snippets</div>
             </div>
-            <div class="settings-row-control"><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
-          </div>
-          <div class="settings-row">
-            <div class="settings-row-info">
-              <div class="settings-row-label">Memory</div>
-              <div class="settings-row-desc">Remember context across sessions</div>
-            </div>
-            <div class="settings-row-control"><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
+            <div class="settings-row-control"><div class="toggle on" id="toggle-codeexec" onclick="this.classList.toggle('on');saveToggle('retrai_codeexec',this)"></div></div>
           </div>
           <div class="settings-row">
             <div class="settings-row-info">
               <div class="settings-row-label">Artifacts</div>
-              <div class="settings-row-desc">Generate file previews and code blocks</div>
+              <div class="settings-row-desc">Generate code, documents, and designs in a dedicated panel</div>
             </div>
-            <div class="settings-row-control"><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
+            <div class="settings-row-control"><div class="toggle on" id="toggle-artifacts" onclick="this.classList.toggle('on');saveToggle('retrai_artifacts_on',this)"></div></div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-info">
+              <div class="settings-row-label">Inline visualizations</div>
+              <div class="settings-row-desc">Allow Retrai to generate charts and diagrams directly in chat</div>
+            </div>
+            <div class="settings-row-control"><div class="toggle on" id="toggle-visuals" onclick="this.classList.toggle('on');saveToggle('retrai_visuals',this)"></div></div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-info">
+              <div class="settings-row-label">Connector discovery</div>
+              <div class="settings-row-desc">Let Retrai surface relevant tools and integrations for your tasks</div>
+            </div>
+            <div class="settings-row-control"><div class="toggle on" id="toggle-connectors" onclick="this.classList.toggle('on');saveToggle('retrai_connectors',this)"></div></div>
+          </div>
+        </div>
+
+        <!-- NOTIFICATIONS SECTION -->
+        <div class="settings-section">
+          <div class="settings-section-title">Notifications</div>
+          <div class="settings-row">
+            <div class="settings-row-info">
+              <div class="settings-row-label">Response completions</div>
+              <div class="settings-row-desc">Get notified when Retrai has finished a long response</div>
+            </div>
+            <div class="settings-row-control"><div class="toggle" id="toggle-notif-complete" onclick="requestNotifPermission(this)"></div></div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-info">
+              <div class="settings-row-label">Sound effects</div>
+              <div class="settings-row-desc">Play a sound when a response is ready</div>
+            </div>
+            <div class="settings-row-control"><div class="toggle" id="toggle-sound" onclick="this.classList.toggle('on');saveToggle('retrai_sound',this)"></div></div>
           </div>
         </div>
         <div class="settings-section">
@@ -1145,6 +1197,7 @@ function enterApp() {
   renderSidebar();
   renderArtifacts();
   showView('chat');
+  loadToggles();
 }
 function doLogout() {
   authState.token=null; authState.userId=null; authState.email=null; authState.isGuest=false;
@@ -1180,6 +1233,44 @@ function updateUserUI() {
 }
 function saveSettingName() {}
 function saveSettingInstructions() {}
+function saveToggle(key, el) {
+  localStorage.setItem(key, el.classList.contains('on') ? '1' : '0');
+}
+function loadToggles() {
+  const toggles = [
+    ['retrai_memory','toggle-memory'],
+    ['retrai_websearch','toggle-websearch'],
+    ['retrai_codeexec','toggle-codeexec'],
+    ['retrai_artifacts_on','toggle-artifacts'],
+    ['retrai_visuals','toggle-visuals'],
+    ['retrai_connectors','toggle-connectors'],
+    ['retrai_sound','toggle-sound'],
+  ];
+  toggles.forEach(([key, id]) => {
+    const val = localStorage.getItem(key);
+    const el = document.getElementById(id);
+    if (!el) return;
+    // default on unless explicitly set to '0'
+    if (val === '0') el.classList.remove('on');
+    else el.classList.add('on');
+  });
+  // notification toggle
+  const notifEl = document.getElementById('toggle-notif-complete');
+  if (notifEl && Notification && Notification.permission === 'granted') {
+    notifEl.classList.add('on');
+  }
+}
+function requestNotifPermission(el) {
+  if (!('Notification' in window)) { showToast('Notifications not supported','error'); return; }
+  if (Notification.permission === 'granted') {
+    el.classList.toggle('on');
+  } else {
+    Notification.requestPermission().then(p => {
+      if (p === 'granted') { el.classList.add('on'); showToast('Notifications enabled'); }
+      else { el.classList.remove('on'); showToast('Notification permission denied','error'); }
+    });
+  }
+}
 
 // ─── SIDEBAR ───
 function toggleSidebar() {
