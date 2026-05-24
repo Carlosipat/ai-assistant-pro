@@ -617,6 +617,7 @@ a{color:inherit;text-decoration:none}
     <div class="sb-brand">
       <div class="sb-brand-icon">R</div>
       <span class="sb-brand-name">Retrai</span>
+      <span id="backend-status" title="Checking backend…" style="width:8px;height:8px;border-radius:50%;background:var(--text3);margin-left:4px;flex-shrink:0;transition:background 0.3s"></span>
     </div>
     <button class="sb-btn new-chat" onclick="newChat()">
       <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10"/></svg>
@@ -1098,6 +1099,28 @@ a{color:inherit;text-decoration:none}
 </div><!-- /#app -->
 
 <script>
+// ─── BACKEND CONNECTION CHECK ───
+async function checkBackendConnection() {
+  const dot = document.getElementById('backend-status');
+  if (!dot) return;
+  try {
+    const r = await fetch(`${API_BASE}/api/health`, { signal: AbortSignal.timeout(8000) });
+    if (r.ok) {
+      dot.style.background = 'var(--success)';
+      dot.title = 'Backend connected ✓';
+    } else {
+      dot.style.background = 'var(--danger)';
+      dot.title = `Backend error: ${r.status}`;
+    }
+  } catch(e) {
+    dot.style.background = 'var(--danger)';
+    dot.title = 'Backend unreachable — check Render logs';
+    showToast('⚠️ Cannot reach backend. It may be waking up — try again in 30s.', 'error');
+  }
+}
+
+
+
 // ─── AUTH STATE ───
 const authState = {
   token: localStorage.getItem('retrai_token') || null,
@@ -1140,7 +1163,7 @@ async function doLogin() {
   const btn=document.getElementById('login-btn');
   btn.textContent='Signing in…'; btn.disabled=true;
   try {
-    const r=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password:pass})});
+    const r=await fetch(`${API_BASE}/api/auth/login`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password:pass})});
     const d=await r.json();
     if(!r.ok){showAuthError(d.detail||'Login failed');return;}
     setAuthSession(d.access_token,d.user_id,d.email);
@@ -1156,7 +1179,7 @@ async function doSignup() {
   const btn=document.getElementById('signup-btn');
   btn.textContent='Creating…'; btn.disabled=true;
   try {
-    const r=await fetch('/api/auth/signup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password:pass})});
+    const r=await fetch(`${API_BASE}/api/auth/signup`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password:pass})});
     const d=await r.json();
     if(!r.ok){showAuthError(d.detail||'Signup failed');return;}
     setAuthSession(d.access_token,d.user_id,d.email);
@@ -1203,7 +1226,7 @@ function doOAuth(provider) {
 async function doForgotPassword() {
   const email=prompt('Enter your email address:');
   if(!email) return;
-  await fetch('/api/auth/reset-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email})});
+  await fetch(`${API_BASE}/api/auth/reset-password`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email})});
   showToast('If that account exists, a reset email was sent','success');
 }
 function continueAsGuest() {
@@ -1251,6 +1274,7 @@ function enterApp() {
   renderArtifacts();
   showView('chat');
   loadToggles();
+  checkBackendConnection();
 }
 function doLogout() {
   // Save current user's data before wiping active state
@@ -1560,11 +1584,11 @@ async function sendMessage() {
       filesToSend.forEach(f=>fd.append('files',f));
       const headers={};
       if(authState.token) headers['Authorization']=`Bearer ${authState.token}`;
-      res=await fetch('/api/chat/upload',{method:'POST',headers,body:fd});
+      res=await fetch(`${API_BASE}/api/chat/upload`,{method:'POST',headers,body:fd});
     } else {
       const headers={'Content-Type':'application/json'};
       if(authState.token) headers['Authorization']=`Bearer ${authState.token}`;
-      res=await fetch('/api/chat/stream',{method:'POST',headers,body:JSON.stringify({message:text,session_id:state.currentChatId,model:state.selectedModel})});
+      res=await fetch(`${API_BASE}/api/chat/stream`,{method:'POST',headers,body:JSON.stringify({message:text,session_id:state.currentChatId,model:state.selectedModel})});
     }
     if(typingEl.parentNode) typingEl.remove();
     const aiId=uid();
@@ -1645,7 +1669,7 @@ async function sendProjectMessage() {
   try {
     const headers={'Content-Type':'application/json'};
     if(authState.token) headers['Authorization']=`Bearer ${authState.token}`;
-    const res=await fetch('/api/chat/stream',{method:'POST',headers,body:JSON.stringify({message:text,session_id:sid,model:state.selectedModel})});
+    const res=await fetch(`${API_BASE}/api/chat/stream`,{method:'POST',headers,body:JSON.stringify({message:text,session_id:sid,model:state.selectedModel})});
     if(typingEl.parentNode) typingEl.remove();
     const aiId=uid();
     const aiMsg={role:'assistant',content:'',id:aiId,model:'Auto'};
