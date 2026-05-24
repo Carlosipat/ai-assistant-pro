@@ -1720,15 +1720,22 @@ async function sendMessage() {
       const parts=aiMsg.content.match(/IMAGE:(.*?)\|PROMPT:(.*)/s);
       if(parts) contentEl.innerHTML=`<img src="${esc(parts[1])}" alt="Generated image" onload="this.closest('#messages').scrollTop=99999">`;
     }
-    // Handle code artifacts
+    // Handle code artifacts - detect, save, and render bar
     if(aiMsg.content.includes('```')) {
-      const artId=uid();
       const match=aiMsg.content.match(/```(\w+)?\n([\s\S]+?)```/);
       if(match) {
         const lang=match[1]||'code'; const code=match[2];
-        const artifact={id:artId,name:`Generated ${lang}`,type:lang,code,chatId:state.currentChatId,createdAt:Date.now()};
+        const artifact={id:uid(),name:`Generated ${lang}`,type:lang,code,chatId:state.currentChatId,createdAt:Date.now()};
         state.artifacts.push(artifact);
         saveUserState('retrai_artifacts', state.artifacts);
+        // Inject the artifact bar below the message text
+        if(contentEl) {
+          const barEl=document.createElement('div');
+          barEl.innerHTML=renderArtifactBar(artifact);
+          contentEl.parentNode.appendChild(barEl.firstElementChild);
+          // Auto-open the preview panel
+          openArtifactPanel(artifact.id);
+        }
       }
     }
     saveChat(state.currentChatId,chatMessages,chatMessages[0]?.content?.slice(0,40)||'Untitled');
@@ -1749,37 +1756,74 @@ const projectMessages={};
 async function sendProjectMessage() {
   const input=document.getElementById('pd-chat-input');
   const text=input.value.trim();
-  if(!text||!state.currentProjectId) return;
+  const hasFiles=pdPendingFiles.length>0;
+  if(!text&&!hasFiles) return;
+  if(!state.currentProjectId) return;
   input.value=''; input.style.height='';
   const proj=state.projects.find(p=>p.id===state.currentProjectId);
   if(!proj) return;
   if(!state.currentProjectSession) startProjectChat();
   const sid=state.currentProjectSession;
   if(!projectMessages[sid]) projectMessages[sid]=[];
-  const userMsg={role:'user',content:text,id:uid()};
+  const filesToSend=[...pdPendingFiles];
+  pdPendingFiles=[]; renderPDAttachPreview();
+  const displayContent=text+(hasFiles?` [Files: ${filesToSend.map(f=>f.name).join(', ')}]`:'');
+  const userMsg={role:'user',content:displayContent,id:uid()};
   projectMessages[sid].push(userMsg);
   const msgs=document.getElementById('pd-messages');
   renderMessage(userMsg,msgs); msgs.scrollTop=msgs.scrollHeight;
   const session=(proj.sessions||[]).find(s=>s.id===sid);
-  if(session&&!session.firstMsg){session.firstMsg=text.slice(0,36);session.updatedAt=Date.now();renderProjectSessions(proj);saveProjState();}
+  if(session&&!session.firstMsg){session.firstMsg=displayContent.slice(0,36);session.updatedAt=Date.now();renderProjectSessions(proj);saveProjState();}
   const typingEl=document.createElement('div');
   typingEl.className='msg-wrap msg-ai';
   typingEl.innerHTML=`<div class="msg-ai-inner"><div class="msg-ai-avatar" style="overflow:hidden;padding:0"><img src="icon-192.png" style="width:100%;height:100%;object-fit:cover;border-radius:50%"></div><div class="msg-ai-content"><div class="msg-typing"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div></div></div>`;
   msgs.appendChild(typingEl); msgs.scrollTop=msgs.scrollHeight;
   try {
-    const headers={'Content-Type':'application/json'};
-    if(authState.token) headers['Authorization']=`Bearer ${authState.token}`;
-    const res=await fetch(`${API_BASE}/api/chat/stream`,{method:'POST',headers,body:JSON.stringify({message:text,session_id:sid,model:state.selectedModel})});
-    if(typingEl.parentNode) typingEl.remove();
-    const aiId=uid();
-    const aiMsg={role:'assistant',content:'',id:aiId,model:'Auto'};
-    projectMessages[sid].push(aiMsg);
-    renderMessage(aiMsg,msgs);
-    const contentEl=document.getElementById('mc-'+aiId);
-    if(res.body){
-      const reader=res.body.getReader(); const dec=new TextDecoder(); let buf='';
-      while(true){const{done,value}=await reader.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();for(const line of lines){if(line.startsWith('data: ')){try{const d=JSON.parse(line.slice(6));if(d.content){aiMsg.content+=d.content;if(contentEl)contentEl.innerHTML=formatMarkdown(aiMsg.content);msgs.scrollTop=msgs.scrollHeight;}}catch{}}}}
-    } else {const data=await res.json();aiMsg.content=data.response||'No response.';if(contentEl)contentEl.innerHTML=formatMarkdown(aiMsg.content);}
+    if(hasFiles) {
+      const fd=new FormData();
+      fd.append('session_id',sid);
+      fd.append('message',text||'Please analyze the attached files.');
+      fd.append('model',state.selectedModel);
+      filesToSend.forEach(f=>fd.append('files',f));
+      const headers={};
+      if(authState.token) headers['Authorization']=`Bearer ${authState.token}`;
+      const res=await fetch(`${API_BASE}/api/chat/upload`,{method:'POST',headers,body:fd});
+      if(typingEl.parentNode) typingEl.remove();
+      const data=await res.json();
+      const aiMsg={role:'assistant',content:data.response||data.content||'No response.',id:uid(),model:'Auto'};
+      projectMessages[sid].push(aiMsg);
+      renderMessage(aiMsg,msgs); msgs.scrollTop=msgs.scrollHeight;
+    } else {
+      const headers={'Content-Type':'application/json'};
+      if(authState.token) headers['Authorization']=`Bearer ${authState.token}`;
+      const res=await fetch(`${API_BASE}/api/chat/stream`,{method:'POST',headers,body:JSON.stringify({message:text,session_id:sid,model:state.selectedModel})});
+      if(typingEl.parentNode) typingEl.remove();
+      const aiId=uid();
+      const aiMsg={role:'assistant',content:'',id:aiId,model:'Auto'};
+      projectMessages[sid].push(aiMsg);
+      renderMessage(aiMsg,msgs);
+      const contentEl=document.getElementById('mc-'+aiId);
+      if(res.body){
+        const reader=res.body.getReader(); const dec=new TextDecoder(); let buf='';
+        while(true){const{done,value}=await reader.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();for(const line of lines){if(line.startsWith('data: ')){try{const d=JSON.parse(line.slice(6));if(d.content){aiMsg.content+=d.content;if(contentEl)contentEl.innerHTML=formatMarkdown(aiMsg.content);msgs.scrollTop=msgs.scrollHeight;}}catch{}}}}
+      } else {const data=await res.json();aiMsg.content=data.response||data.content||'No response.';if(contentEl)contentEl.innerHTML=formatMarkdown(aiMsg.content);}
+      // Detect artifacts and open preview
+      if(aiMsg.content.includes('```')) {
+        const match=aiMsg.content.match(/```(\w+)?\n([\s\S]+?)```/);
+        if(match){
+          const lang=match[1]||'code'; const code=match[2];
+          const artifact={id:uid(),name:`Generated ${lang}`,type:lang,code,chatId:sid,createdAt:Date.now()};
+          state.artifacts.push(artifact);
+          saveUserState('retrai_artifacts',state.artifacts);
+          if(contentEl){
+            const barEl=document.createElement('div');
+            barEl.innerHTML=renderArtifactBar(artifact);
+            contentEl.parentNode.appendChild(barEl.firstElementChild);
+            openArtifactPanel(artifact.id);
+          }
+        }
+      }
+    }
   } catch(err){
     if(typingEl.parentNode) typingEl.remove();
     renderMessage({role:'assistant',content:`⚠️ Backend error: ${err.message}`,id:uid(),model:'Error'},msgs);
@@ -2224,52 +2268,7 @@ function deleteProjectFile(projId, fileIdx) {
   showToast('File removed','success');
 }
 
-// ─── PATCH sendProjectMessage to support file uploads ───
-const _origSendProjectMessage = sendProjectMessage;
-async function sendProjectMessage() {
-  const hasFiles=pdPendingFiles.length>0;
-  if(!hasFiles) { await _origSendProjectMessage(); return; }
-  const input=document.getElementById('pd-chat-input');
-  const text=input.value.trim();
-  if(!state.currentProjectId) return;
-  input.value=''; input.style.height='';
-  const proj=state.projects.find(p=>p.id===state.currentProjectId);
-  if(!proj) return;
-  if(!state.currentProjectSession) startProjectChat();
-  const sid=state.currentProjectSession;
-  if(!projectMessages[sid]) projectMessages[sid]=[];
-  const filesToSend=[...pdPendingFiles];
-  pdPendingFiles=[]; renderPDAttachPreview();
-  const displayContent=text+(hasFiles?` [Files: ${filesToSend.map(f=>f.name).join(', ')}]`:'');
-  const userMsg={role:'user',content:displayContent,id:uid()};
-  projectMessages[sid].push(userMsg);
-  const msgs=document.getElementById('pd-messages');
-  renderMessage(userMsg,msgs); msgs.scrollTop=msgs.scrollHeight;
-  const session=(proj.sessions||[]).find(s=>s.id===sid);
-  if(session&&!session.firstMsg){session.firstMsg=displayContent.slice(0,36);session.updatedAt=Date.now();renderProjectSessions(proj);saveProjState();}
-  const typingEl=document.createElement('div');
-  typingEl.className='msg-wrap msg-ai';
-  typingEl.innerHTML=`<div class="msg-ai-inner"><div class="msg-ai-avatar" style="overflow:hidden;padding:0"><img src="icon-192.png" style="width:100%;height:100%;object-fit:cover;border-radius:50%"></div><div class="msg-ai-content"><div class="msg-typing"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div></div></div>`;
-  msgs.appendChild(typingEl); msgs.scrollTop=msgs.scrollHeight;
-  try {
-    const fd=new FormData();
-    fd.append('session_id',sid);
-    fd.append('message',text||'Please analyze the attached files.');
-    fd.append('model',state.selectedModel);
-    filesToSend.forEach(f=>fd.append('files',f));
-    const headers={};
-    if(authState.token) headers['Authorization']=`Bearer ${authState.token}`;
-    const res=await fetch(`${API_BASE}/api/chat/upload`,{method:'POST',headers,body:fd});
-    if(typingEl.parentNode) typingEl.remove();
-    const data=await res.json();
-    const aiMsg={role:'assistant',content:data.response||data.content||'No response.',id:uid(),model:'Auto'};
-    projectMessages[sid].push(aiMsg);
-    renderMessage(aiMsg,msgs); msgs.scrollTop=msgs.scrollHeight;
-  } catch(err) {
-    if(typingEl.parentNode) typingEl.remove();
-    renderMessage({role:'assistant',content:`⚠️ Upload error: ${err.message}`,id:uid(),model:'Error'},msgs);
-  }
-}
+
 
 // ─── MARKDOWN TABLE SUPPORT ───
 
