@@ -1,8 +1,0 @@
-[{
-      "relation": ["delegate_permission/common.handle_all_urls"],
-      "target": {
-        "namespace": "android_app",
-        "package_name": "com.onrender.ai_assistant_pro_1_on09.twa",
-        "sha256_cert_fingerprints": ["72:A6:41:C7:3C:0E:5E:41:57:19:E7:23:71:FB:DF:37:16:7E:E0:D8:9C:05:8B:B5:40:67:51:E5:0A:9F:DC:93"]
-      }
-    }]
